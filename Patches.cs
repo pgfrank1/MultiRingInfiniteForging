@@ -4,6 +4,7 @@ using StardewModdingAPI;
 using StardewValley;
 using StardewValley.Menus;
 using StardewValley.Objects;
+using StardewValley.Tools;
 
 namespace MultiRingInfiniteForging
 {
@@ -38,11 +39,79 @@ namespace MultiRingInfiniteForging
                         original: forgeIsValid,
                         postfix: new HarmonyMethod(typeof(Patches), nameof(Forge_IsValidCraft_Postfix))
                     );
+                    Log.Log("Patched ForgeMenu.IsValidCraft successfully.", LogLevel.Info);
+                }
+                else
+                {
+                    Log.Log("Could not find ForgeMenu.IsValidCraft method to patch.", LogLevel.Warn);
                 }
             }
             catch (Exception ex)
             {
                 Log.Log("Forge patching failed: " + ex.Message, LogLevel.Warn);
+            }
+            // 5) Forge menu: tighten HighlightItems so non-compatible items are dimmed
+            //    when a Ring is in the left ingredient slot.
+            try
+            {
+                var highlightItems = AccessTools.Method(typeof(ForgeMenu), "HighlightItems");
+                if (highlightItems != null)
+                {
+                    harmony.Patch(
+                        original: highlightItems,
+                        postfix: new HarmonyMethod(typeof(Patches), nameof(Forge_HighlightItems_Postfix))
+                    );
+                    Log.Log("Patched ForgeMenu.HighlightItems successfully.", LogLevel.Info);
+                }
+                else
+                {
+                    Log.Log("Could not find ForgeMenu.HighlightItems method to patch.", LogLevel.Warn);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Log("Forge HighlightItems patching failed: " + ex.Message, LogLevel.Warn);
+            }
+
+            // 6) Infinite weapon forging: remove the 3-gem cap on melee weapons by
+            //    overriding GetMaxForges to return a very high number.
+            try
+            {
+                var maxForges = AccessTools.Method(typeof(StardewValley.Tools.MeleeWeapon),
+                    nameof(StardewValley.Tools.MeleeWeapon.GetMaxForges));
+                if (maxForges != null)
+                {
+                    harmony.Patch(
+                        original: maxForges,
+                        postfix: new HarmonyMethod(typeof(Patches), nameof(MeleeWeapon_GetMaxForges_Postfix))
+                    );
+                    Log.Log("Patched MeleeWeapon.GetMaxForges successfully.", LogLevel.Info);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Log("MeleeWeapon.GetMaxForges patching failed: " + ex.Message, LogLevel.Warn);
+            }
+
+            // 7) Multiple enchantments: stop AddEnchantment from removing the existing
+            //    enchantments of the same family (weapon-family or tool-family) before
+            //    adding the new one.
+            try
+            {
+                var addEnchTool = AccessTools.Method(typeof(Tool),
+                    nameof(Tool.AddEnchantment));
+                if (addEnchTool != null)
+                {
+                    harmony.Patch(
+                        original: addEnchTool,
+                        prefix: new HarmonyMethod(typeof(Patches), nameof(Tool_AddEnchantment_Prefix))
+                    );
+                    Log.Log("Patched Tool.AddEnchantment successfully.", LogLevel.Info);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Log("AddEnchantment patching failed: " + ex.Message, LogLevel.Warn);
             }
         }
 
@@ -64,25 +133,84 @@ namespace MultiRingInfiniteForging
 
         public static void Forge_IsValidCraft_Postfix(Item left_item, Item right_item, ref bool __result)
         {
-            if (!ModEntry.Instance.Config.InfiniteCombining && !ModEntry.Instance.Config.InfiniteReforging)
+            if (!ModEntry.Instance.Config.InfiniteCombining)
                 return;
 
-            // Allow combining when both are rings (including CombinedRings) regardless of how
-            // many rings are already inside them.
-            if (ModEntry.Instance.Config.InfiniteCombining
-                && left_item is Ring && right_item is Ring)
+            // Infinite ring combining: allow ring+ring even when both already have multiple
+            // rings combined inside them (vanilla caps total combined rings at 2).
+            if (left_item is Ring && right_item is Ring)
             {
                 __result = true;
+            }
+        }
+
+        /// <summary>Diagnostic + functional postfix on ForgeMenu.HighlightItems.
+        /// Logs each call so we can verify the patch is active, then (when the left
+        /// ingredient is a Ring) tightens the result so only Rings and Prismatic
+        /// Shards are highlighted.</summary>
+        public static void Forge_HighlightItems_Postfix(ForgeMenu __instance, Item i, ref bool __result)
+        {
+            if (i == null) return;
+
+            Item? leftItem = __instance.leftIngredientSpot.item;
+
+            // Case 1: Ring in left slot.  Only highlight rings and prismatic shards.
+            if (leftItem is Ring)
+            {
+                __result = i is Ring
+                           || (i is StardewValley.Object pShard && pShard.QualifiedItemId == "(O)74");
+                return;
             }
 
-            // Allow reforging (right_item is a Prismatic Shard with a forged ring on the left).
-            if (ModEntry.Instance.Config.InfiniteReforging
-                && left_item is Ring
-                && right_item is StardewValley.Object o
-                && o.QualifiedItemId == "(O)74") // Prismatic Shard
+            // Case 2: Weapon/Slingshot/Tool in left slot.
+            // SDV 1.6.15's HighlightItems doesn't reliably gate on IsValidCraft, so we
+            // recompute the highlight ourselves: an item is highlighted only if it forms
+            // a valid forge craft with the left ingredient.
+            if (leftItem is MeleeWeapon || leftItem is Slingshot
+                                        || (leftItem is Tool t && t.UpgradeLevel > 0))
             {
-                __result = true;
+                bool valid = false;
+                try
+                {
+                    var isValidCraft = AccessTools.Method(typeof(ForgeMenu), "IsValidCraft");
+                    if (isValidCraft != null)
+                    {
+                        var ret = isValidCraft.Invoke(__instance, new object?[] { leftItem, i });
+                        if (ret is bool b) valid = b;
+                    }
+                }
+                catch { /* leave valid = false */ }
+
+                __result = valid;
+                return;
             }
+            // Case 3: Left slot empty or holds something else — leave vanilla's result alone.
+            
+        }
+        
+        /// <summary>Stop MeleeWeapon.AddEnchantment from removing the existing
+        /// BaseWeaponEnchantment instances before adding the new one.  We replicate
+        /// vanilla's call to base.AddEnchantment ourselves and skip the original.</summary>
+        public static void MeleeWeapon_GetMaxForges_Postfix(ref int __result)
+        {
+            if (ModEntry.Instance.Config.InfiniteWeaponForging)
+                __result = int.MaxValue;
+        }
+
+        /// <summary>Stop Tool.AddEnchantment from removing the existing enchantments of
+        /// the same family before adding the new one.  Replicate the relevant logic
+        /// from base Item.AddEnchantment without the RemoveAll call.</summary>
+        public static bool Tool_AddEnchantment_Prefix(
+            Tool __instance,
+            StardewValley.Enchantments.BaseEnchantment enchantment)
+        {
+            if (!ModEntry.Instance.Config.MultipleEnchantments)
+                return true; // run vanilla as normal
+
+            __instance.enchantments.Add(enchantment);
+            enchantment.ApplyTo(__instance, Game1.player);
+
+            return false; // skip the vanilla method
         }
     }
 }

@@ -43,6 +43,8 @@ namespace MultiRingInfiniteForging
                     config.ExtraRingSlots = 4;
                     config.InfiniteCombining = true;
                     config.InfiniteReforging = true;
+                    config.InfiniteWeaponForging = true;
+                    config.MultipleEnchantments = true;
                 },
                 save: save
             );
@@ -81,6 +83,22 @@ namespace MultiRingInfiniteForging
                 setValue: v => config.InfiniteReforging = v,
                 name: () => "Infinite reforging",
                 tooltip: () => "Allow reforging rings with a Prismatic Shard without the iteration cap."
+            );
+
+            api.AddBoolOption(
+                mod: mod.ModManifest,
+                getValue: () => config.InfiniteWeaponForging,
+                setValue: v => config.InfiniteWeaponForging = v,
+                name: () => "Infinite weapon forging",
+                tooltip: () => "Remove the 3-gem cap on weapon forging.  You can keep applying gems beyond level 3."
+            );
+
+            api.AddBoolOption(
+                mod: mod.ModManifest,
+                getValue: () => config.MultipleEnchantments,
+                setValue: v => config.MultipleEnchantments = v,
+                name: () => "Multiple enchantments",
+                tooltip: () => "Allow stacking multiple enchantments on the same weapon or tool instead of replacing the existing one."
             );
         }
     }
