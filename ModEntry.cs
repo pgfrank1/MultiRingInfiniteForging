@@ -10,6 +10,9 @@ namespace MultiRingInfiniteForging
     {
         public static ModEntry Instance = null!;
         public ModConfig Config = null!;
+        
+        /// <summary>Convenience: shorthand for translating a key.</summary>
+        public static string T(string key) => Instance.Helper.Translation.Get(key);
 
         public const string SaveKey = "ExtraRings";
 

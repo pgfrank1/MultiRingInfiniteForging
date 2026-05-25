@@ -49,7 +49,7 @@ namespace MultiRingInfiniteForging
                 save: save
             );
 
-            api.AddSectionTitle(mod.ModManifest, () => "Ring Slots");
+            api.AddSectionTitle(mod.ModManifest, () => ModEntry.T("config.section.title.ring"));
 
             api.AddNumberOption(
                 mod: mod.ModManifest,
@@ -60,45 +60,45 @@ namespace MultiRingInfiniteForging
                     RingSlotManager.EnsureSize();
                     InventoryPagePatches.RebuildForActiveMenu();
                 },
-                name: () => "Extra ring slots",
-                tooltip: () => "How many additional ring slots to add beyond the vanilla 2.",
+                name: () => ModEntry.T("config.extraRingSlots.name"),
+                tooltip: () => ModEntry.T("config.extraRingSlots.description"),
                 min: 0,
                 max: 16,
                 interval: 1
             );
 
-            api.AddSectionTitle(mod.ModManifest, () => "Forge");
+            api.AddSectionTitle(mod.ModManifest, () => ModEntry.T("config.section.title.forge"));
 
             api.AddBoolOption(
                 mod: mod.ModManifest,
                 getValue: () => config.InfiniteCombining,
                 setValue: v => config.InfiniteCombining = v,
-                name: () => "Infinite ring combining",
-                tooltip: () => "Allow combining more than two rings at the forge."
+                name: () => ModEntry.T("config.infiniteCombining.name"),
+                tooltip: () => ModEntry.T("config.infiniteCombining.description")
             );
 
             api.AddBoolOption(
                 mod: mod.ModManifest,
                 getValue: () => config.InfiniteReforging,
                 setValue: v => config.InfiniteReforging = v,
-                name: () => "Infinite reforging",
-                tooltip: () => "Allow reforging rings with a Prismatic Shard without the iteration cap."
+                name: () => ModEntry.T("config.infiniteReforging.name"),
+                tooltip: () => ModEntry.T("config.infiniteReforging.description")
             );
 
             api.AddBoolOption(
                 mod: mod.ModManifest,
                 getValue: () => config.InfiniteWeaponForging,
                 setValue: v => config.InfiniteWeaponForging = v,
-                name: () => "Infinite weapon forging",
-                tooltip: () => "Remove the 3-gem cap on weapon forging.  You can keep applying gems beyond level 3."
+                name: () => ModEntry.T("config.infiniteWeaponForging.name"),
+                tooltip: () => ModEntry.T("config.infiniteWeaponForging.description")
             );
 
             api.AddBoolOption(
                 mod: mod.ModManifest,
                 getValue: () => config.MultipleEnchantments,
                 setValue: v => config.MultipleEnchantments = v,
-                name: () => "Multiple enchantments",
-                tooltip: () => "Allow stacking multiple enchantments on the same weapon or tool instead of replacing the existing one."
+                name: () => ModEntry.T("config.multipleEnchantments.name"),
+                tooltip: () => ModEntry.T("config.multipleEnchantments.description")
             );
         }
     }

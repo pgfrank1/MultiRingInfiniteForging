@@ -1,0 +1,19 @@
+﻿{
+  "panel.label": "Extra Ring Slots",
+  "panel.hover.show": "Show extra ring slots",
+  "panel.hover.hide": "Hide extra ring slots",
+  "panel.slot.empty": "Empty extra ring slot",
+
+  "config.section.title.ring": "Ring Slots",
+  "config.section.title.forge": "Forge",
+  "config.extraRingSlots.name": "Extra Ring Slots",
+  "config.extraRingSlots.description": "How many extra ring slots to add (in addition to the 2 vanilla slots).",
+  "config.infiniteCombining.name": "Infinite Ring Combining",
+  "config.infiniteCombining.description": "Remove the cap on how many rings can be combined together.",
+  "config.infiniteReforging.name": "Infinite Reforging",
+  "config.infiniteReforging.description": "Remove the cap on how many enchantment rerolls a forged ring can have.",
+  "config.infiniteWeaponForging.name": "Infinite Weapon Forging",
+  "config.infiniteWeaponForging.description": "Remove the 3-gem cap on weapon forging (lets you keep applying gems to a weapon beyond level 3).",
+  "config.multipleEnchantments.name": "Multiple Enchantments",
+  "config.multipleEnchantments.description": "Allow stacking multiple enchantments on the same weapon or tool instead of replacing the existing enchantment."
+}

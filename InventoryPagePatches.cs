@@ -98,7 +98,7 @@ namespace MultiRingInfiniteForging
                 name: "ExtraRingToggle",
                 bounds: toggleBounds,
                 label: null,
-                hoverText: "Extra Ring Slots",
+                hoverText: ModEntry.T("panel.label"),
                 texture: Game1.objectSpriteSheet,
                 sourceRect: Game1.getSourceRectForStandardTileSheet(Game1.objectSpriteSheet, 534, 16, 16),
                 scale: 4f)
@@ -424,8 +424,8 @@ namespace MultiRingInfiniteForging
             if (ToggleButton != null && ToggleButton.containsPoint(x, y))
             {
                 _hoverText = _panelOpen
-                    ? "Hide extra ring slots"
-                    : "Show extra ring slots";
+                    ? ModEntry.T("panel.hover.hide")
+                    : ModEntry.T("panel.hover.show");
                 return;
             }
 
@@ -447,7 +447,7 @@ namespace MultiRingInfiniteForging
                     : null;
                 _hoverText = ring != null
                     ? ring.DisplayName + "\n" + ring.getDescription()
-                    : "Empty extra ring slot";
+                    : ModEntry.T("panel.slot.empty");
             }
         }
 
