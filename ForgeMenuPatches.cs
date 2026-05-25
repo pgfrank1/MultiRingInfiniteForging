@@ -339,7 +339,46 @@ namespace MultiRingInfiniteForging
                     }
                 }
             }
+            
+                // 4.5) CombinedRing slot-glow.
+                // Vanilla's ForgeMenu.draw explicitly excludes CombinedRing from the
+                // "this item could go in a slot" highlight (vanilla can't combine already-
+                // combined rings).  With InfiniteCombining we DO support that — so draw the
+                // missing glow ourselves.
+                //
+                // Because vanilla has already drawn the hover tooltip by this point, we
+                // must re-draw the tooltip on top of our glow afterwards, or the glow
+                // would visually obscure the tooltip text.
+                bool combinedRingGlowDrawn = false;
+                if (ModEntry.Instance.Config.InfiniteCombining)
+                {
+                    Item? highlightItem = Game1.player.CursorSlotItem
+                                          ?? GetHeldItem(__instance)
+                                          ?? __instance.hoveredItem;
 
+                    if (highlightItem is CombinedRing
+                        && (__instance.leftIngredientSpot.item == null || __instance.leftIngredientSpot.item is Ring)
+                        && (__instance.rightIngredientSpot.item == null || __instance.rightIngredientSpot.item is Ring)
+                        && !__instance.IsBusy())
+                    {
+                        if (__instance.leftIngredientSpot.item == null)
+                            __instance.leftIngredientSpot.draw(b, Color.White, 0.87f);
+                        if (__instance.rightIngredientSpot.item == null)
+                            __instance.rightIngredientSpot.draw(b, Color.White, 0.87f);
+                        combinedRingGlowDrawn = true;
+                    }
+                }
+
+                // 4.6) If we drew a glow, re-draw the hovered-item tooltip on top so the
+                // ring's info popup isn't visually obscured by our glow sprites.
+                if (combinedRingGlowDrawn && __instance.hoveredItem != null)
+                {
+                    IClickableMenu.drawToolTip(b,
+                        __instance.hoveredItem.getDescription(),
+                        __instance.hoveredItem.DisplayName,
+                        __instance.hoveredItem);
+                }
+            
             // 5) Hover tooltip.
             if (!string.IsNullOrEmpty(_hoverText))
                 IClickableMenu.drawHoverText(b, _hoverText, Game1.smallFont);
@@ -446,37 +485,50 @@ namespace MultiRingInfiniteForging
                 }
             }
 
-            // === CURSOR-ANY: inventory swap path ===
-            // If cursor carries *anything*, and click is on an inventory slot, do a simple
-            // swap to bypass other blocking logic.
-            //
-            // GUARD: refuse to swap with an inventory item that isn't itself a valid forge
-            // ingredient — otherwise the user could drop a carried weapon onto a Frozen
-            // Tear, etc. and pull the Frozen Tear up onto the cursor.
-            Item? cursorAny = Game1.player.CursorSlotItem;
-            if (cursorAny != null)
-            {
-                int invSwapIdx = __instance.inventory.getInventoryPositionOfClick(x, y);
-                Log?.Log($"[Forge] Cursor-any swap path: cursor={cursorAny.Name}, invSwapIdx={invSwapIdx}", LogLevel.Info);
-                if (invSwapIdx >= 0 && invSwapIdx < __instance.inventory.actualInventory.Count)
+                // === CURSOR-ANY: inventory swap path ===
+                // If cursor carries *anything*, and click is on an inventory slot, do a simple
+                // swap to bypass other blocking logic.
+                //
+                // GUARDS:
+                //   1. Refuse to swap with a non-forge inventory item (Frozen Tear, etc.).
+                //   2. Refuse to swap with an inventory item that would form a no-op craft
+                //      against the current forge.left (e.g. picking up a Diamond stack from
+                //      inventory while a fully-gem-enchanted tool is in forge.left).
+                Item? cursorAny = Game1.player.CursorSlotItem;
+                if (cursorAny != null)
                 {
-                    Item? existing = __instance.inventory.actualInventory[invSwapIdx];
-
-                    // Only swap into empty slots OR slots containing a forge-valid item.
-                    bool swapOk = existing == null || IsValidForgeItem(__instance, existing);
-                    if (!swapOk)
+                    int invSwapIdx = __instance.inventory.getInventoryPositionOfClick(x, y);
+                    Log?.Log($"[Forge] Cursor-any swap path: cursor={cursorAny.Name}, invSwapIdx={invSwapIdx}", LogLevel.Info);
+                    if (invSwapIdx >= 0 && invSwapIdx < __instance.inventory.actualInventory.Count)
                     {
-                        Log?.Log($"[Forge] Cursor swap refused: inventory slot {invSwapIdx} holds non-forge item ({existing!.Name})", LogLevel.Info);
+                        Item? existing = __instance.inventory.actualInventory[invSwapIdx];
+
+                        // Guard 1: must be empty or a valid forge ingredient.
+                        bool swapOk = existing == null || IsValidForgeItem(__instance, existing);
+                        if (!swapOk)
+                        {
+                            Log?.Log($"[Forge] Cursor swap refused: inventory slot {invSwapIdx} holds non-forge item ({existing!.Name})", LogLevel.Info);
+                            return false;
+                        }
+
+                        // Guard 2: refuse if picking up `existing` would be a no-op craft
+                        // against the current forge.left tool.  Prevents lifting dimmed
+                        // Diamonds / Prismatic Shards via a swap.
+                        if (existing != null
+                            && __instance.leftIngredientSpot.item is Tool leftToolForSwap
+                            && !CanRightItemEnchantTool(leftToolForSwap, existing))
+                        {
+                            Log?.Log($"[Forge] Cursor swap refused: would lift no-op-ingredient ({existing.Name}) against {leftToolForSwap.Name}", LogLevel.Info);
+                            return false;
+                        }
+
+                        __instance.inventory.actualInventory[invSwapIdx] = cursorAny;
+                        Game1.player.CursorSlotItem = existing;
+                        if (playSound) Game1.playSound("coin");
+                        Log?.Log($"[Forge] Cursor swap with inventory slot {invSwapIdx}: cursor was {cursorAny.Name}, now {existing?.Name ?? "null"}", LogLevel.Info);
                         return false;
                     }
-
-                    __instance.inventory.actualInventory[invSwapIdx] = cursorAny;
-                    Game1.player.CursorSlotItem = existing;
-                    if (playSound) Game1.playSound("coin");
-                    Log?.Log($"[Forge] Cursor swap with inventory slot {invSwapIdx}: cursor was {cursorAny.Name}, now {existing?.Name ?? "null"}", LogLevel.Info);
-                    return false;
                 }
-            }
 
             for (int dbgI = 0; dbgI < __instance.inventory.actualInventory.Count; dbgI++)
             {
@@ -607,9 +659,9 @@ namespace MultiRingInfiniteForging
 
                     // Determine if vanilla would allow this item in the left slot.
                     bool acceptsInLeft =
-                        carriedAny is StardewValley.Tools.MeleeWeapon
+                        (carriedAny is StardewValley.Tools.MeleeWeapon mw && !mw.isScythe())
                         || carriedAny is StardewValley.Tools.Slingshot
-                        || (carriedAny is Tool t && t.UpgradeLevel > 0)
+                        || (carriedAny is Tool t && t.UpgradeLevel > 0 && t is not StardewValley.Tools.MeleeWeapon)
                         || carriedAny is Ring;
 
                     if (!acceptsInLeft)
@@ -628,6 +680,15 @@ namespace MultiRingInfiniteForging
                             if (rightItem != null && !IsValidCraft(__instance, r, rightItem))
                             {
                                 Log?.Log($"[Forge]   -> ring+right={rightItem.Name} would be invalid; refusing", LogLevel.Info);
+                                return false;
+                            }
+                            // Prismatic Shard / Dragon Tooth never combine with rings — refuse
+                            // dropping a ring onto forge.left if those are sitting in forge.right.
+                            if (rightItem != null
+                                && (rightItem.QualifiedItemId == "(O)74"
+                                    || rightItem.QualifiedItemId == "(O)852"))
+                            {
+                                Log?.Log($"[Forge]   -> ring+{rightItem.Name} is not a valid craft; refusing", LogLevel.Info);
                                 return false;
                             }
                         }
@@ -652,6 +713,16 @@ namespace MultiRingInfiniteForging
                     Item? rightExisting = __instance.rightIngredientSpot.item;
                     Item? leftItem = __instance.leftIngredientSpot.item;
 
+                    // Prismatic Shard and Dragon Tooth are tool/weapon-only — refuse the
+                    // drop if forge.left holds a Ring.
+                    if (leftItem is Ring
+                        && (carriedAny.QualifiedItemId == "(O)74"
+                            || carriedAny.QualifiedItemId == "(O)852"))
+                    {
+                        Log?.Log($"[Forge]   -> {carriedAny.Name} doesn't combine with a ring; refusing", LogLevel.Info);
+                        return false;
+                    }
+                    
                     // Vanilla allows ANY valid forge ingredient in forge.right when forge.left
                     // is empty.  Only enforce the IsValidCraft pairing check when forge.left
                     // is already occupied.
@@ -944,7 +1015,7 @@ namespace MultiRingInfiniteForging
         {
             if (item == null) return false;
             if (item is Ring) return true;
-            if (item is StardewValley.Tools.MeleeWeapon) return true;
+            if (item is StardewValley.Tools.MeleeWeapon weapon) return !weapon.isScythe();
             if (item is StardewValley.Tools.Slingshot) return true;
             if (item is Tool) return true;
 
@@ -968,8 +1039,20 @@ namespace MultiRingInfiniteForging
         /// <summary>True if dropping <paramref name="rightItem"/> onto a forge with
         /// <paramref name="leftTool"/> would actually produce a change.  Used to block
         /// "no-op" forges that would otherwise consume the right item with no result.</summary>
-        private static bool CanRightItemEnchantTool(Tool leftTool, Item rightItem)
+        internal static bool CanRightItemEnchantTool(Tool leftTool, Item rightItem)
         {
+            // Same-type weapon: vanilla's "appearance copy" forge.  Infinity Sword + any
+            // other Sword copies the right weapon's sprite onto the left.  This is a
+            // valid craft and produces a visible change (appearance), so allow it.
+            if (leftTool is StardewValley.Tools.MeleeWeapon leftWeapon
+                && rightItem is StardewValley.Tools.MeleeWeapon rightWeapon
+                && rightWeapon.type.Value == leftWeapon.type.Value
+                && !leftWeapon.isScythe()
+                && !rightWeapon.isScythe())
+            {
+                return true;
+            }
+
             // Prismatic Shard: applies a random secondary/innate enchantment from the
             // tool's available list.  If that list is empty, the forge produces null
             // and the tool/shard would be lost — refuse.
@@ -980,18 +1063,40 @@ namespace MultiRingInfiniteForging
                 return available != null && available.Count > 0;
             }
 
-            // Dragon Tooth: re-rolls the secondary enchantment on a galaxy MeleeWeapon.
-            // Only meaningful if the tool is a MeleeWeapon below level 15 and not a
-            // fully-evolved Infinity weapon.
+            // Dragon Tooth: re-rolls the secondary enchantment on a non-scythe, non-Galaxy
+            // MeleeWeapon below level 15.
             if (rightItem.QualifiedItemId == "(O)852")
             {
                 return leftTool is StardewValley.Tools.MeleeWeapon weapon
+                       && !weapon.isScythe()
                        && weapon.getItemLevel() < 15
                        && !weapon.Name.Contains("Galaxy");
             }
 
-            // Gem / Diamond: produces a forge enchantment.  Defer to vanilla's
+            // Diamond: vanilla's Forge picks from the 6 gem-enchantment types but skips
+            // any already on the tool.  Once all 6 are applied, a Diamond craft is a
+            // no-op (consumes the Diamond + shards, adds nothing).  Refuse.
+            if (rightItem.QualifiedItemId == "(O)72")
+            {
+                if (leftTool is StardewValley.Tools.MeleeWeapon scytheCheck && scytheCheck.isScythe())
+                    return false;
+
+                bool anyMissing =
+                    !leftTool.hasEnchantmentOfType<StardewValley.Enchantments.EmeraldEnchantment>()
+                    || !leftTool.hasEnchantmentOfType<StardewValley.Enchantments.AquamarineEnchantment>()
+                    || !leftTool.hasEnchantmentOfType<StardewValley.Enchantments.RubyEnchantment>()
+                    || !leftTool.hasEnchantmentOfType<StardewValley.Enchantments.AmethystEnchantment>()
+                    || !leftTool.hasEnchantmentOfType<StardewValley.Enchantments.TopazEnchantment>()
+                    || !leftTool.hasEnchantmentOfType<StardewValley.Enchantments.JadeEnchantment>();
+                return anyMissing;
+            }
+
+            // Gem (Ruby/Emerald/Topaz/Aquamarine/Jade/Amethyst): produces a forge
+            // enchantment.  Scythes can't be gem-forged.  Otherwise defer to vanilla's
             // CanAddEnchantment, which respects our infinite-forging patch.
+            if (leftTool is StardewValley.Tools.MeleeWeapon meleeForGem && meleeForGem.isScythe())
+                return false;
+
             var enchantment = StardewValley.Enchantments.BaseEnchantment
                 .GetEnchantmentFromItem(leftTool, rightItem);
             if (enchantment == null) return false;

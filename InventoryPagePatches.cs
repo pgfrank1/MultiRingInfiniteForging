@@ -283,108 +283,107 @@ namespace MultiRingInfiniteForging
         //  Click handling
         // ============================================================
 
-        public static bool LeftClick_Prefix(InventoryPage __instance, int x, int y, bool playSound)
-        {
-            if (ToggleButton != null && ToggleButton.containsPoint(x, y))
+            public static bool LeftClick_Prefix(InventoryPage __instance, int x, int y, bool playSound)
             {
-                TogglePanel(playSound);
-                return false;
+                if (ToggleButton != null && ToggleButton.containsPoint(x, y))
+                {
+                    TogglePanel(playSound);
+                    return false;
+                }
+
+                if (!_panelOpen) return true;
+
+                foreach (var slot in Slots)
+                {
+                    if (!slot.containsPoint(x, y)) continue;
+
+                    int idx = SlotIndex(slot);
+                    if (idx < 0) return true;
+
+                    Item? held = Game1.player.CursorSlotItem;
+                    if (held != null && held is not Ring) return false;
+
+                    Ring? heldRing = held as Ring;
+                    Ring? current = RingSlotManager.Slots[idx];
+
+                    RingSlotManager.Equip(idx, heldRing);
+                    Game1.player.CursorSlotItem = current;
+
+                    if (playSound) Game1.playSound("crit");
+                    return false;
+                }
+                return true;
             }
 
-            // === ONE-CLICK EQUIPPED-RING → PANEL TRANSFER ===
-            // When the panel is open and the player clicks the vanilla Left Ring or
-            // Right Ring equipment slot, AND they aren't already carrying anything,
-            // move that ring straight into the first empty panel slot.
-            if (_panelOpen && Game1.player.CursorSlotItem == null)
+            public static bool RightClick_Prefix(InventoryPage __instance, int x, int y, bool playSound)
             {
-                ClickableComponent? leftRing  = __instance.equipmentIcons.Find(c => c.name == "Left Ring");
-                ClickableComponent? rightRing = __instance.equipmentIcons.Find(c => c.name == "Right Ring");
-
-                Ring? clickedRing = null;
-                if (leftRing != null && leftRing.containsPoint(x, y))
-                    clickedRing = Game1.player.leftRing.Value;
-                else if (rightRing != null && rightRing.containsPoint(x, y))
-                    clickedRing = Game1.player.rightRing.Value;
-
-                if (clickedRing != null)
+                // === RIGHT-CLICK EQUIPPED-RING → PANEL TRANSFER ===
+                // When the panel is open and the player right-clicks the vanilla Left Ring or
+                // Right Ring equipment slot with an empty cursor, move that ring straight
+                // into the first empty panel slot.  Left-click is left to vanilla so the
+                // standard "pick up to cursor" behaviour is preserved.
+                if (_panelOpen && Game1.player.CursorSlotItem == null)
                 {
-                    int firstEmpty = -1;
-                    for (int i = 0; i < RingSlotManager.Slots.Count; i++)
-                        if (RingSlotManager.Slots[i] == null) { firstEmpty = i; break; }
+                    ClickableComponent? leftRing  = __instance.equipmentIcons.Find(c => c.name == "Left Ring");
+                    ClickableComponent? rightRing = __instance.equipmentIcons.Find(c => c.name == "Right Ring");
 
-                    if (firstEmpty >= 0)
+                    bool clickedLeft  = leftRing  != null && leftRing.containsPoint(x, y);
+                    bool clickedRight = rightRing != null && rightRing.containsPoint(x, y);
+
+                    Ring? clickedRing = null;
+                    if (clickedLeft)       clickedRing = Game1.player.leftRing.Value;
+                    else if (clickedRight) clickedRing = Game1.player.rightRing.Value;
+
+                    if (clickedRing != null)
                     {
-                        // Unequip from the farmer, place in our panel.
-                        clickedRing.onUnequip(Game1.player);
-                        if (leftRing != null && leftRing.containsPoint(x, y))
-                            Game1.player.leftRing.Value = null;
-                        else
-                            Game1.player.rightRing.Value = null;
+                        int firstEmpty = -1;
+                        for (int i = 0; i < RingSlotManager.Slots.Count; i++)
+                            if (RingSlotManager.Slots[i] == null) { firstEmpty = i; break; }
 
-                        RingSlotManager.Equip(firstEmpty, clickedRing);
+                        if (firstEmpty >= 0)
+                        {
+                            clickedRing.onUnequip(Game1.player);
+                            if (clickedLeft)  Game1.player.leftRing.Value  = null;
+                            else              Game1.player.rightRing.Value = null;
 
-                        if (playSound) Game1.playSound("crit");
-                        return false;
+                            RingSlotManager.Equip(firstEmpty, clickedRing);
+
+                            if (playSound) Game1.playSound("crit");
+                            return false;
+                        }
                     }
                 }
-            }
 
-            if (!_panelOpen) return true;
+                if (!_panelOpen) return true;
 
-            foreach (var slot in Slots)
-            {
-                if (!slot.containsPoint(x, y)) continue;
-
-                int idx = SlotIndex(slot);
-                if (idx < 0) return true;
-
-                Item? held = Game1.player.CursorSlotItem;
-                if (held != null && held is not Ring) return false;
-
-                Ring? heldRing = held as Ring;
-                Ring? current = RingSlotManager.Slots[idx];
-
-                RingSlotManager.Equip(idx, heldRing);
-                Game1.player.CursorSlotItem = current;
-
-                if (playSound) Game1.playSound("crit");
-                return false;
-            }
-            return true;
-        }
-
-        public static bool RightClick_Prefix(InventoryPage __instance, int x, int y, bool playSound)
-        {
-            if (!_panelOpen) return true;
-
-            foreach (var slot in Slots)
-            {
-                if (!slot.containsPoint(x, y)) continue;
-
-                int idx = SlotIndex(slot);
-                if (idx < 0) return true;
-
-                Ring? ring = RingSlotManager.Slots[idx];
-                if (ring == null) return false;
-
-                Ring? heldRing = Game1.player.CursorSlotItem as Ring;
-                if (heldRing != null)
+                foreach (var slot in Slots)
                 {
-                    RingSlotManager.Equip(idx, heldRing);
-                    Game1.player.CursorSlotItem = ring;
-                }
-                else
-                {
-                    RingSlotManager.Equip(idx, null);
-                    var leftover = Game1.player.addItemToInventory(ring);
-                    if (leftover != null) Game1.player.CursorSlotItem = leftover;
-                }
+                    if (!slot.containsPoint(x, y)) continue;
 
-                if (playSound) Game1.playSound("coin");
-                return false;
+                    int idx = SlotIndex(slot);
+                    if (idx < 0) return true;
+
+                    Ring? ring = RingSlotManager.Slots[idx];
+                    if (ring == null) return false;
+
+                    Ring? heldRing = Game1.player.CursorSlotItem as Ring;
+                    if (heldRing != null)
+                    {
+                        RingSlotManager.Equip(idx, heldRing);
+                        Game1.player.CursorSlotItem = ring;
+                    }
+                    else
+                    {
+                        RingSlotManager.Equip(idx, null);
+                        var leftover = Game1.player.addItemToInventory(ring);
+                        if (leftover != null) Game1.player.CursorSlotItem = leftover;
+                    }
+
+                    if (playSound) Game1.playSound("coin");
+                    return false;
+                }
+                return true;
             }
-            return true;
-        }
 
         // ============================================================
         //  Toggle
