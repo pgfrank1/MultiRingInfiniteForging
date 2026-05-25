@@ -33,6 +33,37 @@ namespace MultiRingInfiniteForging
         private static bool _panelOpen;
 
         public static bool IsPanelOpen => _panelOpen;
+        
+        // Forge spritesheet (cached on first access).  Vanilla loads this into
+        // ForgeMenu.forgeTextures; we mirror its content path so our visuals
+        // match the rest of the forge UI exactly.
+        private static Texture2D? _forgeTextures;
+        private static Texture2D ForgeTextures
+        {
+            get
+            {
+                if (_forgeTextures == null)
+                    _forgeTextures = Game1.content.Load<Texture2D>("LooseSprites\\ForgeMenu");
+                return _forgeTextures;
+            }
+        }
+
+        /// <summary>Calibrated tint that renders to the forge's #BC635B panel BG.  The raw
+        /// hex tint is shifted to compensate for menuTexture's cream-coloured source pixels
+        /// (so tint × source ≈ #BC635B).</summary>
+        private static readonly Color ForgePanelTint = new Color(0xBC, 0x81, 0xC5);
+
+        /// <summary>Color sampled from the vanilla forge Ring1/Ring2 slot border (#6D0A03).</summary>
+        private static readonly Color ForgeSlotTint  = new Color(0x6D, 0x0A, 0x03);
+
+        /// <summary>Solid fill behind transparent slot frames so the toggle/slot has a
+        /// recessed look instead of empty transparent center.  Slightly darker than the
+        /// panel BG so the slot reads as a sunken cell.</summary>
+        private static readonly Color ForgeSlotFill = new Color(0x9B, 0x40, 0x35);
+
+        /// <summary>Source rectangle on ForgeTextures for the dusky-red equipment-slot frame
+        /// (the one vanilla uses for Ring1/Ring2/leftIngredient/rightIngredient).</summary>
+        private static readonly Rectangle ForgeSlotFrameSource = new Rectangle(140, 250, 28, 28);
 
         public static void Apply(Harmony harmony, IMonitor monitor)
         {
@@ -264,81 +295,86 @@ namespace MultiRingInfiniteForging
         //  Draw
         // ============================================================
 
-        public static void Draw_Postfix(ForgeMenu __instance, SpriteBatch b)
-        {
-            if (ToggleButton == null) return;
-
-            // 1) Toggle button frame.
-            b.Draw(Game1.menuTexture, ToggleButton.bounds,
-                Game1.getSourceRectForStandardTileSheet(Game1.menuTexture, 10),
-                Color.White);
-
-            // 2) Toggle button icon.
-            b.Draw(
-                ToggleButton.texture,
-                new Vector2(ToggleButton.bounds.X + 16, ToggleButton.bounds.Y + 16),
-                ToggleButton.sourceRect,
-                Color.White,
-                rotation: 0f,
-                origin: Vector2.Zero,
-                scale: 2f,
-                effects: SpriteEffects.None,
-                layerDepth: 0.86f);
-
-            // 3) Open/closed arrow indicator.
-            Utility.drawTextWithShadow(b,
-                _panelOpen ? ">" : "<",
-                Game1.smallFont,
-                new Vector2(ToggleButton.bounds.Right - 16, ToggleButton.bounds.Bottom - 24),
-                Game1.textColor);
-
-            // 4) Expanded slot panel.
-            if (_panelOpen && Slots.Count > 0)
+            public static void Draw_Postfix(ForgeMenu __instance, SpriteBatch b)
             {
-                Rectangle slotsBg = GetSlotsBounds();
-                IClickableMenu.drawTextureBox(b, Game1.menuTexture,
-                    new Rectangle(0, 256, 60, 60),
-                    slotsBg.X - 16, slotsBg.Y - 16,
-                    slotsBg.Width + 32, slotsBg.Height + 32,
-                    Color.White, 1f, drawShadow: true);
+                if (ToggleButton == null) return;
 
-                // Rings are "greyed out" when a non-Ring is in either forge ingredient slot
-                // (matches vanilla's inventory ring grey-out in that state).
-                bool ringsBlocked =
-                    (__instance.leftIngredientSpot.item  != null && __instance.leftIngredientSpot.item  is not Ring) ||
-                    (__instance.rightIngredientSpot.item != null && __instance.rightIngredientSpot.item is not Ring);
+                // 1) Toggle button: solid fill underneath (gives the recessed cell a
+                //    background), then the slot frame on top.
+                b.Draw(Game1.staminaRect, ToggleButton.bounds, ForgeSlotFill);
+                b.Draw(Game1.menuTexture, ToggleButton.bounds,
+                    Game1.getSourceRectForStandardTileSheet(Game1.menuTexture, 10),
+                    ForgeSlotTint);
 
-                foreach (var slot in Slots)
+                // 2) Toggle button icon (ring book).
+                b.Draw(
+                    ToggleButton.texture,
+                    new Vector2(ToggleButton.bounds.X + 16, ToggleButton.bounds.Y + 16),
+                    ToggleButton.sourceRect,
+                    Color.White,
+                    rotation: 0f,
+                    origin: Vector2.Zero,
+                    scale: 2f,
+                    effects: SpriteEffects.None,
+                    layerDepth: 0.87f);
+
+                // 3) Open/closed arrow indicator.
+                Utility.drawTextWithShadow(b,
+                    _panelOpen ? ">" : "<",
+                    Game1.smallFont,
+                    new Vector2(ToggleButton.bounds.Right - 16, ToggleButton.bounds.Bottom - 24),
+                    Game1.textColor);
+
+                // 4) Expanded slot panel.
+                if (_panelOpen && Slots.Count > 0)
                 {
-                    int idx = SlotIndex(slot);
-                    var ring = idx >= 0 && idx < RingSlotManager.Slots.Count
-                        ? RingSlotManager.Slots[idx]
-                        : null;
+                    Rectangle slotsBg = GetSlotsBounds();
 
-                    b.Draw(Game1.menuTexture, slot.bounds,
-                        Game1.getSourceRectForStandardTileSheet(Game1.menuTexture, 10),
-                        Color.White);
+                    // Panel BG — calibrated tint to render as forge's #BC635B.
+                    IClickableMenu.drawTextureBox(b, Game1.menuTexture,
+                        new Rectangle(0, 256, 60, 60),
+                        slotsBg.X - 16, slotsBg.Y - 16,
+                        slotsBg.Width + 32, slotsBg.Height + 32,
+                        ForgePanelTint, 1f, drawShadow: true);
 
-                    if (ring != null)
+                    bool ringsBlocked =
+                        (__instance.leftIngredientSpot.item  != null && __instance.leftIngredientSpot.item  is not Ring) ||
+                        (__instance.rightIngredientSpot.item != null && __instance.rightIngredientSpot.item is not Ring);
+
+                    foreach (var slot in Slots)
                     {
-                        if (ringsBlocked)
+                        int idx = SlotIndex(slot);
+                        var ring = idx >= 0 && idx < RingSlotManager.Slots.Count
+                            ? RingSlotManager.Slots[idx]
+                            : null;
+
+                        // Solid fill behind the slot frame so the cell isn't transparent.
+                        b.Draw(Game1.staminaRect, slot.bounds, ForgeSlotFill);
+
+                        // Slot border in the deep brick-red.
+                        b.Draw(Game1.menuTexture, slot.bounds,
+                            Game1.getSourceRectForStandardTileSheet(Game1.menuTexture, 10),
+                            ForgeSlotTint);
+
+                        if (ring != null)
                         {
-                            // Dim the ring to indicate it's not pickable.
-                            ring.drawInMenu(b, new Vector2(slot.bounds.X, slot.bounds.Y),
-                                scaleSize: slot.scale,
-                                transparency: 0.35f,
-                                layerDepth: 0.86f,
-                                drawStackNumber: StackDrawType.Hide,
-                                color: Color.Gray,
-                                drawShadow: true);
-                        }
-                        else
-                        {
-                            ring.drawInMenu(b, new Vector2(slot.bounds.X, slot.bounds.Y), slot.scale);
+                            if (ringsBlocked)
+                            {
+                                ring.drawInMenu(b, new Vector2(slot.bounds.X, slot.bounds.Y),
+                                    scaleSize: slot.scale,
+                                    transparency: 0.35f,
+                                    layerDepth: 0.87f,
+                                    drawStackNumber: StackDrawType.Hide,
+                                    color: Color.Gray,
+                                    drawShadow: true);
+                            }
+                            else
+                            {
+                                ring.drawInMenu(b, new Vector2(slot.bounds.X, slot.bounds.Y), slot.scale);
+                            }
                         }
                     }
                 }
-            }
             
                 // 4.5) CombinedRing slot-glow.
                 // Vanilla's ForgeMenu.draw explicitly excludes CombinedRing from the
