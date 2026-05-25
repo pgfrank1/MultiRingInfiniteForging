@@ -24,7 +24,10 @@ namespace MultiRingInfiniteForging
             // 2) Add extra ring slots into the vanilla inventory/equipment page.
             InventoryPagePatches.Apply(harmony, monitor);
 
-            // 3) Forge menu: allow combining rings even when they're already combined rings
+            // 3) Add the same collapsible extra-ring panel into the forge menu.
+            ForgeMenuPatches.Apply(harmony, monitor);
+
+            // 4) Forge menu: allow combining rings even when they're already combined rings
             //    or already at the cap, and allow unlimited reforges.
             try
             {

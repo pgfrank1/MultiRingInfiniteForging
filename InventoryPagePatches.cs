@@ -24,7 +24,6 @@ namespace MultiRingInfiniteForging
         private static ClickableTextureComponent? ToggleButton;
         private static bool _panelOpen;
 
-        /// <summary>True if the extra-ring panel is currently expanded.</summary>
         public static bool IsPanelOpen => _panelOpen;
 
         public static void Apply(Harmony harmony, IMonitor monitor)
@@ -66,9 +65,7 @@ namespace MultiRingInfiniteForging
             {
                 page.equipmentIcons.RemoveAll(c =>
                     c.name.StartsWith("ExtraRing") || c.name == "ExtraRingToggle");
-                Ctor_Postfix(page);
-
-                // Rebuild the snap component cache so navigation reaches the new IDs.
+                InventoryPagePatches.Ctor_Postfix(page);
                 page.populateClickableComponentList();
             }
         }
@@ -97,7 +94,6 @@ namespace MultiRingInfiniteForging
             var toggleBounds = GetToggleBounds(page);
             if (toggleBounds == Rectangle.Empty) return;
 
-            // Toggle button.  baseScale must match scale so the icon doesn't drift smaller.
             ToggleButton = new ClickableTextureComponent(
                 name: "ExtraRingToggle",
                 bounds: toggleBounds,
@@ -113,7 +109,7 @@ namespace MultiRingInfiniteForging
                 leftNeighborID = -99998,
                 rightNeighborID = -99998
             };
-            ToggleButton.baseScale = 4f;  // freeze base scale so draw() doesn't shrink it
+            ToggleButton.baseScale = 4f;
 
             int gridStartX = toggleBounds.X + SlotSize + SlotSpacing * 2;
             int gridStartY = toggleBounds.Y;
@@ -148,10 +144,6 @@ namespace MultiRingInfiniteForging
             ApplyPanelVisibility();
         }
 
-        /// <summary>Show/hide the slot grid for the controller by changing only the toggle
-        /// button's right-neighbor pointer. Slot IDs themselves stay stable. When the panel
-        /// is closed we set the slots' bounds to a zero-size off-screen rectangle so the
-        /// snap-cursor logic never picks them as a target either.</summary>
         private static void ApplyPanelVisibility()
         {
             if (ToggleButton == null) return;
@@ -164,7 +156,6 @@ namespace MultiRingInfiniteForging
             {
                 if (_panelOpen)
                 {
-                    // Restore visible bounds.
                     int col = i % 6;
                     int row = i / 6;
                     Slots[i].bounds = new Rectangle(
@@ -174,7 +165,6 @@ namespace MultiRingInfiniteForging
                 }
                 else
                 {
-                    // Move off-screen so containsPoint() and snap-region search ignore them.
                     Slots[i].bounds = new Rectangle(-9999, -9999, 0, 0);
                 }
             }
@@ -194,7 +184,6 @@ namespace MultiRingInfiniteForging
             foreach (var slot in Slots)
                 __instance.equipmentIcons.Add(slot);
 
-            // D-pad down from Boots → toggle button.
             var boots = __instance.equipmentIcons.Find(c => c.name == "Boots");
             if (boots != null && ToggleButton != null)
                 boots.downNeighborID = ToggleButton.myID;
@@ -206,16 +195,12 @@ namespace MultiRingInfiniteForging
 
         public static void Draw_Postfix(InventoryPage __instance, SpriteBatch b)
         {
-            // 1) Toggle button.
             if (ToggleButton != null)
             {
-                // Background plate that matches an equipment slot.
                 b.Draw(Game1.menuTexture, ToggleButton.bounds,
                     Game1.getSourceRectForStandardTileSheet(Game1.menuTexture, 10),
                     Color.White);
 
-                // Draw the icon manually so we don't lean on ClickableTextureComponent.draw
-                // (which animates scale toward baseScale and can fight our static size).
                 b.Draw(
                     ToggleButton.texture,
                     new Vector2(ToggleButton.bounds.X + 16, ToggleButton.bounds.Y + 16),
@@ -223,7 +208,7 @@ namespace MultiRingInfiniteForging
                     Color.White,
                     rotation: 0f,
                     origin: Vector2.Zero,
-                    scale: 2f,           // 16px sprite drawn at 2x = 32px, centered in 64px slot
+                    scale: 2f,
                     effects: SpriteEffects.None,
                     layerDepth: 0.86f);
 
@@ -234,7 +219,6 @@ namespace MultiRingInfiniteForging
                     Game1.textColor);
             }
 
-            // 2) Expanded slot panel.
             if (_panelOpen && Slots.Count > 0)
             {
                 Rectangle panelBg = GetPanelBackground();
@@ -261,6 +245,22 @@ namespace MultiRingInfiniteForging
 
             if (!string.IsNullOrEmpty(_hoverText))
                 IClickableMenu.drawHoverText(b, _hoverText, Game1.smallFont);
+
+            // Redraw the cursor-held item ONLY if the mouse is currently over our panel,
+            // so the held ring isn't hidden behind the panel/slot frames.  Outside the
+            // panel, vanilla already drew the held item — drawing again would double it.
+            if (Game1.player.CursorSlotItem != null && _panelOpen && Slots.Count > 0)
+            {
+                int mx = Game1.getOldMouseX();
+                int my = Game1.getOldMouseY();
+                Rectangle panelBg = GetPanelBackground();
+                if (panelBg.Contains(mx, my))
+                {
+                    Game1.player.CursorSlotItem.drawInMenu(b,
+                        new Vector2(mx + 8, my + 8),
+                        1f);
+                }
+            }
         }
 
         private static Rectangle GetPanelBackground()
@@ -289,6 +289,44 @@ namespace MultiRingInfiniteForging
             {
                 TogglePanel(playSound);
                 return false;
+            }
+
+            // === ONE-CLICK EQUIPPED-RING → PANEL TRANSFER ===
+            // When the panel is open and the player clicks the vanilla Left Ring or
+            // Right Ring equipment slot, AND they aren't already carrying anything,
+            // move that ring straight into the first empty panel slot.
+            if (_panelOpen && Game1.player.CursorSlotItem == null)
+            {
+                ClickableComponent? leftRing  = __instance.equipmentIcons.Find(c => c.name == "Left Ring");
+                ClickableComponent? rightRing = __instance.equipmentIcons.Find(c => c.name == "Right Ring");
+
+                Ring? clickedRing = null;
+                if (leftRing != null && leftRing.containsPoint(x, y))
+                    clickedRing = Game1.player.leftRing.Value;
+                else if (rightRing != null && rightRing.containsPoint(x, y))
+                    clickedRing = Game1.player.rightRing.Value;
+
+                if (clickedRing != null)
+                {
+                    int firstEmpty = -1;
+                    for (int i = 0; i < RingSlotManager.Slots.Count; i++)
+                        if (RingSlotManager.Slots[i] == null) { firstEmpty = i; break; }
+
+                    if (firstEmpty >= 0)
+                    {
+                        // Unequip from the farmer, place in our panel.
+                        clickedRing.onUnequip(Game1.player);
+                        if (leftRing != null && leftRing.containsPoint(x, y))
+                            Game1.player.leftRing.Value = null;
+                        else
+                            Game1.player.rightRing.Value = null;
+
+                        RingSlotManager.Equip(firstEmpty, clickedRing);
+
+                        if (playSound) Game1.playSound("crit");
+                        return false;
+                    }
+                }
             }
 
             if (!_panelOpen) return true;
@@ -358,8 +396,6 @@ namespace MultiRingInfiniteForging
             ApplyPanelVisibility();
             if (playSound) Game1.playSound(_panelOpen ? "bigSelect" : "bigDeSelect");
 
-            // Rebuild the snap-region cache so the controller can reach our newly-visible
-            // (or newly-hidden) slot rectangles.
             if (Game1.activeClickableMenu is GameMenu gm
                 && gm.pages[GameMenu.inventoryTab] is InventoryPage page)
             {
@@ -368,15 +404,9 @@ namespace MultiRingInfiniteForging
                 if (Game1.options.SnappyMenus && ToggleButton != null)
                 {
                     if (_panelOpen && Slots.Count > 0)
-                    {
-                        // Move focus into the panel.
                         page.setCurrentlySnappedComponentTo(Slots[0].myID);
-                    }
                     else
-                    {
-                        // Keep focus on the toggle button after closing.
                         page.setCurrentlySnappedComponentTo(ToggleButton.myID);
-                    }
                     page.snapCursorToCurrentSnappedComponent();
                 }
             }

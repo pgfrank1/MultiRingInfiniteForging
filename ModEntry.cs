@@ -30,29 +30,38 @@ namespace MultiRingInfiniteForging
 
         private void OnGameLaunched(object? sender, GameLaunchedEventArgs e)
         {
+            // Wire GMCM if it's installed; otherwise this is a no-op.
             GenericModConfigMenuIntegration.Register(
                 mod: this,
                 config: Config,
                 save: () => Helper.WriteConfig(Config));
         }
 
-        /// <summary>If the extra-ring panel is open and the player presses B (cancel) on the
-        /// controller, close just the panel instead of exiting the inventory menu.</summary>
+        /// <summary>If an extra-ring panel is open and the player presses B (cancel) on the
+        /// controller, close just the panel instead of exiting the inventory or forge menu.</summary>
         private void OnButtonPressed(object? sender, ButtonPressedEventArgs e)
         {
             if (e.Button != SButton.ControllerB) return;
-            if (!InventoryPagePatches.IsPanelOpen) return;
 
-            // Only intercept while the inventory tab of the GameMenu is active.
-            if (Game1.activeClickableMenu is not GameMenu gm) return;
-            if (gm.currentTab != GameMenu.inventoryTab) return;
+            // Inventory tab on the GameMenu.
+            if (InventoryPagePatches.IsPanelOpen
+                && Game1.activeClickableMenu is GameMenu gm
+                && gm.currentTab == GameMenu.inventoryTab
+                && Game1.player.CursorSlotItem == null)
+            {
+                InventoryPagePatches.TogglePanel(playSound: true);
+                Helper.Input.Suppress(e.Button);
+                return;
+            }
 
-            // Don't intercept if the player is dragging an item with the cursor —
-            // they probably want to dump it back in inventory by closing the menu.
-            if (Game1.player.CursorSlotItem != null) return;
-
-            InventoryPagePatches.TogglePanel(playSound: true);
-            Helper.Input.Suppress(e.Button);
+            // Forge menu.
+            if (ForgeMenuPatches.IsPanelOpen
+                && Game1.activeClickableMenu is ForgeMenu
+                && Game1.player.CursorSlotItem == null)
+            {
+                ForgeMenuPatches.TogglePanel(playSound: true);
+                Helper.Input.Suppress(e.Button);
+            }
         }
 
         // ---------- save/load ----------
