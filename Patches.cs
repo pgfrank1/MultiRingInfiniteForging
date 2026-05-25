@@ -202,15 +202,23 @@ namespace MultiRingInfiniteForging
         /// from base Item.AddEnchantment without the RemoveAll call.</summary>
         public static bool Tool_AddEnchantment_Prefix(
             Tool __instance,
-            StardewValley.Enchantments.BaseEnchantment enchantment)
+            StardewValley.Enchantments.BaseEnchantment enchantment,
+            ref bool __result)
         {
             if (!ModEntry.Instance.Config.MultipleEnchantments)
                 return true; // run vanilla as normal
 
+            if (enchantment == null)
+            {
+                __result = false;
+                return false;
+            }
+
             __instance.enchantments.Add(enchantment);
             enchantment.ApplyTo(__instance, Game1.player);
 
-            return false; // skip the vanilla method
+            __result = true;   // tell Tool.Forge that the enchantment was added
+            return false;      // skip the vanilla method
         }
     }
 }

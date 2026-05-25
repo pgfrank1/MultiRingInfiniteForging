@@ -54,6 +54,19 @@ namespace MultiRingInfiniteForging
                 prefix: new HarmonyMethod(typeof(ForgeMenuPatches), nameof(LeftClick_Prefix))
             );
 
+            // NEW: postfix to see what vanilla left in _heldItem after handling the click.
+            harmony.Patch(
+                original: AccessTools.Method(typeof(ForgeMenu), nameof(ForgeMenu.receiveLeftClick)),
+                postfix: new HarmonyMethod(typeof(ForgeMenuPatches), nameof(LeftClick_Postfix))
+            );
+
+            // NEW: postfix on update() to detect when vanilla finishes the craft and assigns _heldItem.
+            harmony.Patch(
+                original: AccessTools.Method(typeof(ForgeMenu), nameof(ForgeMenu.update),
+                    new[] { typeof(Microsoft.Xna.Framework.GameTime) }),
+                postfix: new HarmonyMethod(typeof(ForgeMenuPatches), nameof(Update_Postfix))
+            );
+            
             harmony.Patch(
                 original: AccessTools.Method(typeof(ForgeMenu), nameof(ForgeMenu.performHoverAction)),
                 postfix: new HarmonyMethod(typeof(ForgeMenuPatches), nameof(Hover_Postfix))
@@ -981,6 +994,36 @@ namespace MultiRingInfiniteForging
             }
         }
 
+        // NEW: track _heldItem after each click to see what vanilla did with it.
+        public static void LeftClick_Postfix(ForgeMenu __instance, int x, int y)
+        {
+            var held = GetHeldItem(__instance);
+            Log?.Log($"[Forge] *Postfix* click at ({x},{y})  cursor={Game1.player.CursorSlotItem?.Name ?? "null"}  forge.held={held?.Name ?? "null"}  forge.left={__instance.leftIngredientSpot.item?.Name ?? "null"}  forge.right={__instance.rightIngredientSpot.item?.Name ?? "null"}",
+                LogLevel.Info);
+        }
+
+        // NEW: track _heldItem transitions during update().  Only log when it changes,
+        // so we don't flood the log every frame.
+        private static string? _lastHeldName;
+        private static string? _lastCraftResultName;
+        public static void Update_Postfix(ForgeMenu __instance)
+        {
+            var held = GetHeldItem(__instance);
+            var heldName = held?.Name ?? "null";
+            var craftResult = __instance.craftResultDisplay?.item;
+            var craftResultName = craftResult?.Name ?? "null";
+
+            if (heldName != _lastHeldName)
+            {
+                Log?.Log($"[Forge] update: forge.held transitioned {_lastHeldName ?? "(init)"} -> {heldName}", LogLevel.Info);
+                _lastHeldName = heldName;
+            }
+            if (craftResultName != _lastCraftResultName)
+            {
+                Log?.Log($"[Forge] update: craftResultDisplay transitioned {_lastCraftResultName ?? "(init)"} -> {craftResultName}", LogLevel.Info);
+                _lastCraftResultName = craftResultName;
+            }
+        }
         // ============================================================
         //  Helpers
         // ============================================================
