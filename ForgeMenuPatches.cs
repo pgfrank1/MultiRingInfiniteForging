@@ -450,9 +450,9 @@ namespace MultiRingInfiniteForging
             // If cursor carries *anything*, and click is on an inventory slot, do a simple
             // swap to bypass other blocking logic.
             //
-            // This simplifies certain scenarios like cursor-has-weapon, click inventory-has-ring:
-            // without this, the weapon would prevent the ring pickup, because Forge blocks
-            // creating a carry with mismatched types.
+            // GUARD: refuse to swap with an inventory item that isn't itself a valid forge
+            // ingredient — otherwise the user could drop a carried weapon onto a Frozen
+            // Tear, etc. and pull the Frozen Tear up onto the cursor.
             Item? cursorAny = Game1.player.CursorSlotItem;
             if (cursorAny != null)
             {
@@ -461,6 +461,15 @@ namespace MultiRingInfiniteForging
                 if (invSwapIdx >= 0 && invSwapIdx < __instance.inventory.actualInventory.Count)
                 {
                     Item? existing = __instance.inventory.actualInventory[invSwapIdx];
+
+                    // Only swap into empty slots OR slots containing a forge-valid item.
+                    bool swapOk = existing == null || IsValidForgeItem(__instance, existing);
+                    if (!swapOk)
+                    {
+                        Log?.Log($"[Forge] Cursor swap refused: inventory slot {invSwapIdx} holds non-forge item ({existing!.Name})", LogLevel.Info);
+                        return false;
+                    }
+
                     __instance.inventory.actualInventory[invSwapIdx] = cursorAny;
                     Game1.player.CursorSlotItem = existing;
                     if (playSound) Game1.playSound("coin");
@@ -587,6 +596,8 @@ namespace MultiRingInfiniteForging
             // need to handle these ourselves when our promotion has moved a non-Ring item
             // onto the cursor.  This works for both Ring and non-Ring cursor items.
             Item? carriedAny = Game1.player.CursorSlotItem;
+            Log?.Log($"[Forge]   reached carriedAny block; carriedAny={carriedAny?.Name ?? "null"}  leftContains={__instance.leftIngredientSpot.containsPoint(x,y)}  rightContains={__instance.rightIngredientSpot.containsPoint(x,y)}",
+                LogLevel.Info);
             if (carriedAny != null)
             {
                 // Forge LEFT ingredient slot.
@@ -641,10 +652,34 @@ namespace MultiRingInfiniteForging
                     Item? rightExisting = __instance.rightIngredientSpot.item;
                     Item? leftItem = __instance.leftIngredientSpot.item;
 
-                    // Right slot accepts anything that forms a valid craft with left.
-                    if (leftItem == null || !IsValidCraft(__instance, leftItem, carriedAny))
+                    // Vanilla allows ANY valid forge ingredient in forge.right when forge.left
+                    // is empty.  Only enforce the IsValidCraft pairing check when forge.left
+                    // is already occupied.
+                    bool acceptsInRight;
+                    if (leftItem == null)
                     {
-                        Log?.Log($"[Forge]   -> {carriedAny.Name} does not form a valid craft with forge.left={leftItem?.Name ?? "null"}; refusing", LogLevel.Info);
+                        acceptsInRight = IsValidForgeItem(__instance, carriedAny);
+                    }
+                    else
+                    {
+                        acceptsInRight = IsValidCraft(__instance, leftItem, carriedAny);
+
+                        // Extra rule: if left is a Tool and the right item would produce
+                        // no enchantment / no change (e.g. Prismatic Shard on a tool with
+                        // no available enchantments), refuse — otherwise the craft would
+                        // consume the items with no result.
+                        if (acceptsInRight
+                            && leftItem is Tool leftTool
+                            && !CanRightItemEnchantTool(leftTool, carriedAny))
+                        {
+                            Log?.Log($"[Forge]   -> {carriedAny.Name} cannot enchant/forge {leftTool.Name} (no-op craft); refusing", LogLevel.Info);
+                            return false;
+                        }
+                    }
+
+                    if (!acceptsInRight)
+                    {
+                        Log?.Log($"[Forge]   -> {carriedAny.Name} not accepted in forge.right (left={leftItem?.Name ?? "null"}); refusing", LogLevel.Info);
                         return false;
                     }
 
@@ -744,7 +779,8 @@ namespace MultiRingInfiniteForging
                     if (rightItem == null)
                     {
                         Item? leftItem = __instance.leftIngredientSpot.item;
-                        if (leftItem != null && IsValidCraft(__instance, leftItem, carriedRing))
+                        // Vanilla allows placing a Ring in forge.right with empty forge.left.
+                        if (leftItem == null || IsValidCraft(__instance, leftItem, carriedRing))
                         {
                             Log?.Log($"[Forge]   -> drop onto forge.right", LogLevel.Info);
                             __instance.rightIngredientSpot.item = carriedRing;
@@ -758,7 +794,7 @@ namespace MultiRingInfiniteForging
                     if (rightItem is Ring)
                     {
                         Item? leftItem = __instance.leftIngredientSpot.item;
-                        if (leftItem != null && IsValidCraft(__instance, leftItem, carriedRing))
+                        if (leftItem == null || IsValidCraft(__instance, leftItem, carriedRing))
                         {
                             Log?.Log($"[Forge]   -> swap with forge.right (existing ring)", LogLevel.Info);
                             __instance.rightIngredientSpot.item = carriedRing;
@@ -903,25 +939,63 @@ namespace MultiRingInfiniteForging
         }
 
         /// <summary>True if the item is something the forge would accept (ring, weapon, tool,
-        /// or any item HighlightItems would mark valid like prismatic shards / gems).</summary>
+        /// or any item HighlightItems would mark valid like prismatic shards / gems / dragon tooth).</summary>
         private static bool IsValidForgeItem(ForgeMenu menu, Item item)
         {
+            if (item == null) return false;
             if (item is Ring) return true;
             if (item is StardewValley.Tools.MeleeWeapon) return true;
             if (item is StardewValley.Tools.Slingshot) return true;
             if (item is Tool) return true;
 
-            // Fall back to vanilla's own filter for gems, prismatic shards, etc.
-            if (HighlightItemsMethod != null)
-            {
-                try
-                {
-                    var result = HighlightItemsMethod.Invoke(menu, new object[] { item });
-                    if (result is bool b) return b;
-                }
-                catch { /* ignore reflection errors */ }
-            }
+            // Gems → forge enchantments (Ruby/Emerald/Topaz/Aquamarine/Jade/Amethyst), and
+            // Diamond → random forge enchantment.
+            if (StardewValley.Enchantments.BaseEnchantment.GetEnchantmentFromItem(null, item) != null)
+                return true;
+
+            // Prismatic Shard → adds a secondary (innate) enchantment chosen from the
+            // tool's available list.
+            if (item.QualifiedItemId == "(O)74") return true;
+
+            // Dragon Tooth → re-rolls the secondary enchantment on galaxy weapons.
+            if (item.QualifiedItemId == "(O)852") return true;
+
+            // (Cinder Shard "(O)848" is the forge currency, NOT a right-slot ingredient.)
+
             return false;
+        }
+        
+        /// <summary>True if dropping <paramref name="rightItem"/> onto a forge with
+        /// <paramref name="leftTool"/> would actually produce a change.  Used to block
+        /// "no-op" forges that would otherwise consume the right item with no result.</summary>
+        private static bool CanRightItemEnchantTool(Tool leftTool, Item rightItem)
+        {
+            // Prismatic Shard: applies a random secondary/innate enchantment from the
+            // tool's available list.  If that list is empty, the forge produces null
+            // and the tool/shard would be lost — refuse.
+            if (rightItem.QualifiedItemId == "(O)74")
+            {
+                var available = StardewValley.Enchantments.BaseEnchantment
+                    .GetAvailableEnchantmentsForItem(leftTool);
+                return available != null && available.Count > 0;
+            }
+
+            // Dragon Tooth: re-rolls the secondary enchantment on a galaxy MeleeWeapon.
+            // Only meaningful if the tool is a MeleeWeapon below level 15 and not a
+            // fully-evolved Infinity weapon.
+            if (rightItem.QualifiedItemId == "(O)852")
+            {
+                return leftTool is StardewValley.Tools.MeleeWeapon weapon
+                       && weapon.getItemLevel() < 15
+                       && !weapon.Name.Contains("Galaxy");
+            }
+
+            // Gem / Diamond: produces a forge enchantment.  Defer to vanilla's
+            // CanAddEnchantment, which respects our infinite-forging patch.
+            var enchantment = StardewValley.Enchantments.BaseEnchantment
+                .GetEnchantmentFromItem(leftTool, rightItem);
+            if (enchantment == null) return false;
+            return leftTool.CanAddEnchantment(enchantment);
         }
 
         // ============================================================

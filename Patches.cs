@@ -144,49 +144,64 @@ namespace MultiRingInfiniteForging
             }
         }
 
-        /// <summary>Diagnostic + functional postfix on ForgeMenu.HighlightItems.
-        /// Logs each call so we can verify the patch is active, then (when the left
-        /// ingredient is a Ring) tightens the result so only Rings and Prismatic
-        /// Shards are highlighted.</summary>
-        public static void Forge_HighlightItems_Postfix(ForgeMenu __instance, Item i, ref bool __result)
-        {
-            if (i == null) return;
-
-            Item? leftItem = __instance.leftIngredientSpot.item;
-
-            // Case 1: Ring in left slot.  Only highlight rings and prismatic shards.
-            if (leftItem is Ring)
+            /// <summary>Diagnostic + functional postfix on ForgeMenu.HighlightItems.
+            /// Logs each call so we can verify the patch is active, then (when the left
+            /// ingredient is a Ring) tightens the result so only Rings and Prismatic
+            /// Shards are highlighted.</summary>
+            public static void Forge_HighlightItems_Postfix(ForgeMenu __instance, Item i, ref bool __result)
             {
-                __result = i is Ring
-                           || (i is StardewValley.Object pShard && pShard.QualifiedItemId == "(O)74");
-                return;
-            }
+                if (i == null) return;
 
-            // Case 2: Weapon/Slingshot/Tool in left slot.
-            // SDV 1.6.15's HighlightItems doesn't reliably gate on IsValidCraft, so we
-            // recompute the highlight ourselves: an item is highlighted only if it forms
-            // a valid forge craft with the left ingredient.
-            if (leftItem is MeleeWeapon || leftItem is Slingshot
-                                        || (leftItem is Tool t && t.UpgradeLevel > 0))
-            {
-                bool valid = false;
-                try
+                Item? leftItem = __instance.leftIngredientSpot.item;
+
+                // Case 1: Ring in left slot.  Only highlight rings and prismatic shards.
+                if (leftItem is Ring)
                 {
-                    var isValidCraft = AccessTools.Method(typeof(ForgeMenu), "IsValidCraft");
-                    if (isValidCraft != null)
+                    __result = i is Ring
+                               || (i is StardewValley.Object pShard && pShard.QualifiedItemId == "(O)74");
+                    return;
+                }
+
+                // Case 2: Weapon/Slingshot/Tool in left slot.
+                // SDV 1.6.15's HighlightItems doesn't reliably gate on IsValidCraft, so we
+                // recompute the highlight ourselves: an item is highlighted only if it forms
+                // a valid forge craft with the left ingredient.
+                if (leftItem is MeleeWeapon || leftItem is Slingshot
+                                            || (leftItem is Tool t && t.UpgradeLevel > 0))
+                {
+                    bool valid = false;
+                    try
                     {
-                        var ret = isValidCraft.Invoke(__instance, new object?[] { leftItem, i });
-                        if (ret is bool b) valid = b;
+                        var isValidCraft = AccessTools.Method(typeof(ForgeMenu), "IsValidCraft");
+                        if (isValidCraft != null)
+                        {
+                            var ret = isValidCraft.Invoke(__instance, new object?[] { leftItem, i });
+                            if (ret is bool b) valid = b;
+                        }
+                    }
+                    catch { /* leave valid = false */ }
+
+                    __result = valid;
+                    return;
+                }
+
+                // Case 3: Left slot empty.  Vanilla refuses to highlight a Tool whose
+                // GetAvailableEnchantmentsForItem list is empty (i.e. all secondary
+                // enchantments are applied) — that means the user can't even PICK UP
+                // a fully-enchanted tool from inventory to forge more gems onto it.
+                // Override: a tool/weapon/ring is always pickable when the forge is empty;
+                // the right-slot drop logic handles refusing no-op crafts later.
+                if (leftItem == null && !__result)
+                {
+                    if (i is Ring
+                        || i is MeleeWeapon
+                        || i is Slingshot
+                        || (i is Tool tool && tool.UpgradeLevel > 0))
+                    {
+                        __result = true;
                     }
                 }
-                catch { /* leave valid = false */ }
-
-                __result = valid;
-                return;
             }
-            // Case 3: Left slot empty or holds something else — leave vanilla's result alone.
-            
-        }
         
         /// <summary>Stop MeleeWeapon.AddEnchantment from removing the existing
         /// BaseWeaponEnchantment instances before adding the new one.  We replicate
