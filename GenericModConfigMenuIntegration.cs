@@ -42,7 +42,6 @@ namespace MultiRingInfiniteForging
                 {
                     config.ExtraRingSlots = 4;
                     config.InfiniteCombining = true;
-                    config.InfiniteReforging = true;
                     config.InfiniteWeaponForging = true;
                     config.MultipleEnchantments = true;
                 },
@@ -75,14 +74,6 @@ namespace MultiRingInfiniteForging
                 setValue: v => config.InfiniteCombining = v,
                 name: () => ModEntry.T("config.infiniteCombining.name"),
                 tooltip: () => ModEntry.T("config.infiniteCombining.description")
-            );
-
-            api.AddBoolOption(
-                mod: mod.ModManifest,
-                getValue: () => config.InfiniteReforging,
-                setValue: v => config.InfiniteReforging = v,
-                name: () => ModEntry.T("config.infiniteReforging.name"),
-                tooltip: () => ModEntry.T("config.infiniteReforging.description")
             );
 
             api.AddBoolOption(

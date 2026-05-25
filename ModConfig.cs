@@ -7,9 +7,6 @@
 
         /// <summary>Remove the cap on how many rings can be combined together.</summary>
         public bool InfiniteCombining { get; set; } = true;
-
-        /// <summary>Remove the cap on how many enchantment rerolls a forged ring can have.</summary>
-        public bool InfiniteReforging { get; set; } = true;
         
         /// <summary>Remove the 3-gem cap on weapon forging (lets you keep applying gems
         /// to a weapon beyond level 3).</summary>
