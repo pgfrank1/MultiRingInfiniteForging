@@ -44,6 +44,7 @@ namespace MultiRingInfiniteForging
                     config.InfiniteCombining = true;
                     config.InfiniteWeaponForging = true;
                     config.MultipleEnchantments = true;
+                    config.VerboseLogging = false;
                 },
                 save: save
             );
@@ -90,6 +91,16 @@ namespace MultiRingInfiniteForging
                 setValue: v => config.MultipleEnchantments = v,
                 name: () => ModEntry.T("config.multipleEnchantments.name"),
                 tooltip: () => ModEntry.T("config.multipleEnchantments.description")
+            );
+            
+            api.AddSectionTitle(mod.ModManifest, () => ModEntry.T("config.section.title.verbose.logging"));
+            
+            api.AddBoolOption(
+                mod: mod.ModManifest,
+                getValue: () => config.VerboseLogging,
+                setValue: v => config.VerboseLogging = v,
+                name: () => ModEntry.T("config.verbose.logging.name"),
+                tooltip: () => ModEntry.T("config.verbose.logging.description")
             );
         }
     }

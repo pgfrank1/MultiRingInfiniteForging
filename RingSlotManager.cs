@@ -36,25 +36,43 @@ namespace MultiRingInfiniteForging
         public static void ApplyAllEffects()
         {
             EnsureSize();
+            int applied = 0;
             foreach (var ring in Slots)
                 ring?.onEquip(Game1.player);
             if (Game1.player != null)
                 Game1.player.buffs.Dirty = true;
+            ModEntry.Diag(
+                $"RingSlotManager.ApplyAllEffects: applied {applied} ring(s). " +
+                $"MagneticRadius={Game1.player?.MagneticRadius}");
         }
 
         public static void RemoveAllEffects()
         {
+            int removed = 0;
             foreach (var ring in Slots)
-                ring?.onUnequip(Game1.player);
+            {
+                if (ring != null)
+                {
+                    ring.onUnequip(Game1.player);
+                    removed++;
+                }
+            }
             if (Game1.player != null)
                 Game1.player.buffs.Dirty = true;
+            ModEntry.Diag($"RingSlotManager.RemoveAllEffects: removed {removed} ring(s).");
         }
 
         public static void Equip(int slot, Ring? ring)
         {
             EnsureSize();
+            var previous = Slots[slot];
+            ModEntry.Diag(
+                $"RingSlotManager.Equip slot={slot} " +
+                $"previous={previous?.DisplayName ?? "null"} " +
+                $"new={ring?.DisplayName ?? "null"}");
+
             // Unequip current
-            Slots[slot]?.onUnequip(Game1.player);
+            previous?.onUnequip(Game1.player);
             Slots[slot] = ring;
             ring?.onEquip(Game1.player);
 
@@ -62,7 +80,12 @@ namespace MultiRingInfiniteForging
             // sees the new/removed ring.  Without this, magnetic radius, defense,
             // crit chance, etc. wouldn't update until something else dirties the cache.
             if (Game1.player != null)
+            {
                 Game1.player.buffs.Dirty = true;
+                ModEntry.Diag(
+                    $"RingSlotManager.Equip set buffs.Dirty=true. " +
+                    $"MagneticRadius now={Game1.player.MagneticRadius}");
+            }
         }
 
         // ---------- per-frame / world-event forwarders ----------

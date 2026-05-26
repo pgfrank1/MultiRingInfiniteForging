@@ -40,7 +40,7 @@ namespace MultiRingInfiniteForging
                         original: getEquipped,
                         postfix: new HarmonyMethod(typeof(Patches), nameof(GetEquippedItems_Postfix))
                     );
-                    Log.Log("Patched Farmer.GetEquippedItems successfully.", LogLevel.Info);
+                    Log.Log("Patched Farmer.GetEquippedItems successfully.", LogLevel.Trace);
                 }
                 else
                 {
@@ -67,7 +67,7 @@ namespace MultiRingInfiniteForging
                         original: monsterDrop,
                         postfix: new HarmonyMethod(typeof(Patches), nameof(MonsterDrop_Postfix))
                     );
-                    Log.Log("Patched GameLocation.monsterDrop successfully.", LogLevel.Info);
+                    Log.Log("Patched GameLocation.monsterDrop successfully.", LogLevel.Trace);
                 }
                 else
                 {
@@ -96,7 +96,7 @@ namespace MultiRingInfiniteForging
                         original: forgeIsValid,
                         postfix: new HarmonyMethod(typeof(Patches), nameof(Forge_IsValidCraft_Postfix))
                     );
-                    Log.Log("Patched ForgeMenu.IsValidCraft successfully.", LogLevel.Info);
+                    Log.Log("Patched ForgeMenu.IsValidCraft successfully.", LogLevel.Trace);
                 }
                 else
                 {
@@ -118,7 +118,7 @@ namespace MultiRingInfiniteForging
                         original: highlightItems,
                         postfix: new HarmonyMethod(typeof(Patches), nameof(Forge_HighlightItems_Postfix))
                     );
-                    Log.Log("Patched ForgeMenu.HighlightItems successfully.", LogLevel.Info);
+                    Log.Log("Patched ForgeMenu.HighlightItems successfully.", LogLevel.Trace);
                 }
                 else
                 {
@@ -142,7 +142,7 @@ namespace MultiRingInfiniteForging
                         original: maxForges,
                         postfix: new HarmonyMethod(typeof(Patches), nameof(MeleeWeapon_GetMaxForges_Postfix))
                     );
-                    Log.Log("Patched MeleeWeapon.GetMaxForges successfully.", LogLevel.Info);
+                    Log.Log("Patched MeleeWeapon.GetMaxForges successfully.", LogLevel.Trace);
                 }
             }
             catch (Exception ex)
@@ -163,7 +163,7 @@ namespace MultiRingInfiniteForging
                         original: addEnchTool,
                         prefix: new HarmonyMethod(typeof(Patches), nameof(Tool_AddEnchantment_Prefix))
                     );
-                    Log.Log("Patched Tool.AddEnchantment successfully.", LogLevel.Info);
+                    Log.Log("Patched Tool.AddEnchantment successfully.", LogLevel.Trace);
                 }
             }
             catch (Exception ex)
@@ -183,7 +183,7 @@ namespace MultiRingInfiniteForging
                         original: forgeMethod,
                         postfix: new HarmonyMethod(typeof(Patches), nameof(Tool_Forge_Postfix))
                     );
-                    Log.Log("Patched Tool.Forge successfully.", LogLevel.Info);
+                    Log.Log("Patched Tool.Forge successfully.", LogLevel.Trace);
                 }
             }
             catch (Exception ex)
@@ -205,7 +205,7 @@ namespace MultiRingInfiniteForging
                         original: forgeMethod,
                         prefix: new HarmonyMethod(typeof(Patches), nameof(Tool_Forge_Diamond_Prefix))
                     );
-                    Log.Log("Patched Tool.Forge (Diamond cap) successfully.", LogLevel.Info);
+                    Log.Log("Patched Tool.Forge (Diamond cap) successfully.", LogLevel.Trace);
                 }
             }
             catch (Exception ex)
@@ -227,7 +227,7 @@ namespace MultiRingInfiniteForging
                         original: forgeMethod,
                         prefix: new HarmonyMethod(typeof(Patches), nameof(Tool_Forge_PrismaticReroll_Prefix))
                     );
-                    Log.Log("Patched Tool.Forge (Prismatic re-roll) successfully.", LogLevel.Info);
+                    Log.Log("Patched Tool.Forge (Prismatic re-roll) successfully.", LogLevel.Trace);
                 }
             }
             catch (Exception ex)
@@ -250,7 +250,7 @@ namespace MultiRingInfiniteForging
                         original: forgeMethod,
                         prefix: new HarmonyMethod(typeof(Patches), nameof(Tool_Forge_DragonToothReroll_Prefix))
                     );
-                    Log.Log("Patched Tool.Forge (Dragon Tooth Infinity re-roll) successfully.", LogLevel.Info);
+                    Log.Log("Patched Tool.Forge (Dragon Tooth Infinity re-roll) successfully.", LogLevel.Trace);
                 }
             }
             catch (Exception ex)

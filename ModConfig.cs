@@ -15,5 +15,12 @@
         /// <summary>Allow stacking multiple enchantments on the same weapon or tool
         /// instead of replacing the existing enchantment.</summary>
         public bool MultipleEnchantments { get; set; } = true;
+        
+        /// <summary>If true, emit per-tick / per-recompute diagnostic lines to
+        /// smapi-latest.log.  These are normally suppressed even from the log file
+        /// because they're high-volume; only enable when debugging a reproducible
+        /// issue.  Low-frequency diagnostics (ring equip events, patch results) are
+        /// always written at Trace level regardless of this setting.</summary>
+        public bool VerboseLogging { get; set; } = false;
     }
 }

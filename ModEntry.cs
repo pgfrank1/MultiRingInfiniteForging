@@ -13,6 +13,22 @@ namespace MultiRingInfiniteForging
         
         /// <summary>Convenience: shorthand for translating a key.</summary>
         public static string T(string key) => Instance.Helper.Translation.Get(key);
+        
+        /// <summary>Low-frequency diagnostic (ring equipped, patch applied, etc.).
+        /// Always written to smapi-latest.log at Trace level.  Hidden from the
+        /// console by default; visible when the user enables DeveloperMode or
+        /// adds the mod to SMAPI's VerboseLogging list.</summary>
+        public static void Diag(string message) =>
+            Instance.Monitor.Log(message, LogLevel.Trace);
+
+        /// <summary>High-frequency diagnostic (per-tick snapshot, per-recompute
+        /// trace).  Suppressed entirely unless ModConfig.VerboseLogging is true
+        /// to keep smapi-latest.log readable for unrelated troubleshooting.</summary>
+        public static void DiagVerbose(string message)
+        {
+            if (!Instance.Config.VerboseLogging) return;
+            Instance.Monitor.Log(message, LogLevel.Trace);
+        }
 
         public const string SaveKey = "ExtraRings";
 
@@ -26,6 +42,7 @@ namespace MultiRingInfiniteForging
             helper.Events.GameLoop.Saving += OnSaving;
             helper.Events.GameLoop.DayEnding += OnDayEnding;
             helper.Events.GameLoop.UpdateTicked += OnUpdateTicked;
+            helper.Events.GameLoop.OneSecondUpdateTicked += OnOneSecondTick;
             helper.Events.Player.Warped += OnWarped;
             helper.Events.Input.ButtonPressed += OnButtonPressed;
 
@@ -114,20 +131,79 @@ namespace MultiRingInfiniteForging
         
         /// <summary>Periodic diagnostic snapshot of the player's combined buff state.
         /// Used to verify that extra-slot rings are flowing through AddEquipmentEffects.</summary>
-        private void OnOneSecondTick(object? sender, StardewModdingAPI.Events.OneSecondUpdateTickedEventArgs e)
+        /// <summary>Periodic diagnostic snapshot of the player's combined buff state.
+        /// Mirrors the mrif_stats console command but at a per-second cadence.  Only
+        /// emitted when VerboseLogging is enabled in the config — so by default this
+        /// adds zero noise to the log file.  Designed so a verbose-mode log captures
+        /// every value a user would want to verify when reporting a ring-effect bug.</summary>
+        private void OnOneSecondTick(object? sender, OneSecondUpdateTickedEventArgs e)
         {
+            if (!Config.VerboseLogging) return;
             if (!Context.IsWorldReady || Game1.player == null) return;
 
             int extra = 0;
             foreach (var r in RingSlotManager.Slots)
                 if (r != null) extra++;
-            if (extra == 0) return; // nothing to log about
+            if (extra == 0) return; // nothing relevant to snapshot
 
-            Monitor.Log(
-                $"[Diag] tick snapshot: MagneticRadius={Game1.player.MagneticRadius} " +
-                $"Immunity={Game1.player.Immunity} buffs.Dirty already-recomputed " +
-                $"(extra rings={extra})",
-                LogLevel.Trace);
+            var p = Game1.player;
+            var b = p.buffs;
+            var loc = p.currentLocation;
+
+            // --- Equipped rings: left, right, and every extra slot ---
+            string leftRing  = p.leftRing.Value?.DisplayName  ?? "(empty)";
+            string rightRing = p.rightRing.Value?.DisplayName ?? "(empty)";
+            var extraRingNames = new System.Text.StringBuilder();
+            for (int i = 0; i < RingSlotManager.Slots.Count; i++)
+            {
+                if (i > 0) extraRingNames.Append(", ");
+                extraRingNames.Append(RingSlotManager.Slots[i]?.DisplayName ?? "(empty)");
+            }
+
+            // --- Light sources in current location (for Glow/Iridium Band/Glowstone) ---
+            int sharedLights = 0;
+            try
+            {
+                // sharedLights is a NetIntDictionary<LightSource, NetRef<LightSource>>.
+                // Iterate .Values rather than relying on a Count property (netcode
+                // collections expose enumeration but property surfaces vary by version).
+                if (loc?.sharedLights != null)
+                {
+                    foreach (var _ in loc.sharedLights.Values)
+                        sharedLights++;
+                }
+            }
+            catch { /* ignore — diagnostics must never throw */ }
+
+            DiagVerbose(
+                "[Tick] === snapshot ===" +
+                $"\n  location              = {loc?.Name ?? "null"}" +
+                $"\n  position              = {p.Position}" +
+                $"\n  facing                = {p.FacingDirection}" +
+                $"\n  rings: leftRing       = {leftRing}" +
+                $"\n         rightRing      = {rightRing}" +
+                $"\n         extra ({extra}/{RingSlotManager.Slots.Count}) = [{extraRingNames}]" +
+                "\n  -- Combat stats --" +
+                $"\n  Defense               = {b.Defense}" +
+                $"\n  Attack                = {b.Attack}" +
+                $"\n  AttackMultiplier      = {b.AttackMultiplier:F2}" +
+                $"\n  KnockbackMultiplier   = {b.KnockbackMultiplier:F2}" +
+                $"\n  WeaponSpeedMult       = {b.WeaponSpeedMultiplier:F2}" +
+                $"\n  CriticalChanceMult    = {b.CriticalChanceMultiplier:F2}" +
+                $"\n  CriticalPowerMult     = {b.CriticalPowerMultiplier:F2}" +
+                $"\n  Immunity              = {b.Immunity}" +
+                "\n  -- World / movement --" +
+                $"\n  MagneticRadius        = {p.MagneticRadius} (base 128, buff {b.MagneticRadius})" +
+                $"\n  Speed buff            = {b.Speed:F2}" +
+                $"\n  LuckLevel buff        = {b.LuckLevel}" +
+                "\n  -- Resources --" +
+                $"\n  Health                = {p.health}/{p.maxHealth}" +
+                $"\n  Stamina               = {p.Stamina:F1}/{p.MaxStamina}" +
+                $"\n  MaxStamina buff       = {b.MaxStamina}" +
+                "\n  -- Mechanics --" +
+                $"\n  buffs.Dirty           = {b.Dirty}" +
+                $"\n  sharedLights in loc   = {sharedLights}" +
+                $"\n  in combat?            = {Game1.fadeToBlack || Game1.currentMinigame != null || p.UsingTool}");
         }
 
         /// <summary>If an extra-ring panel is open and the player presses B (cancel) on the

@@ -286,9 +286,9 @@ namespace MultiRingInfiniteForging
             __instance.populateClickableComponentList();
 
             // One-shot diagnostic: dump equipmentIcons.
-            Log?.Log("[Forge] equipmentIcons dump:", LogLevel.Info);
+            ModEntry.DiagVerbose("[Forge] equipmentIcons dump:");
             foreach (var c in __instance.equipmentIcons)
-                Log?.Log($"  name='{c.name}'  bounds={c.bounds}", LogLevel.Info);
+                ModEntry.DiagVerbose($"  name='{c.name}'  bounds={c.bounds}");
         }
 
         // ============================================================
@@ -465,7 +465,7 @@ namespace MultiRingInfiniteForging
             //
             // if (Game1.player.CursorSlotItem == null && heldItem != null && !clickedForgeIngredient)
             // {
-            //     Log?.Log($"[Forge] Promoting forge.held ({heldItem.Name}) to CursorSlotItem", LogLevel.Info);
+            //     ModEntry.DiagVerbose($"[Forge] Promoting forge.held ({heldItem.Name}) to CursorSlotItem");
             //     Game1.player.CursorSlotItem = heldItem;
             //     SetHeldItem(__instance, null);
             //     heldItem = null;
@@ -485,21 +485,19 @@ namespace MultiRingInfiniteForging
             // code (below), not vanilla's, so promotion is always safe.
             if (Game1.player.CursorSlotItem == null && heldItem != null)
             {
-                Log?.Log($"[Forge] Promoting forge.held ({heldItem.Name}) to CursorSlotItem", LogLevel.Info);
+                ModEntry.DiagVerbose($"[Forge] Promoting forge.held ({heldItem.Name}) to CursorSlotItem");
                 Game1.player.CursorSlotItem = heldItem;
                 SetHeldItem(__instance, null);
                 heldItem = null;
             }
             
-            Log?.Log($"[Forge] *Prefix* click at ({x},{y})  cursor={Game1.player.CursorSlotItem?.Name ?? "null"}  forge.held={heldItem?.Name ?? "null"}  inv@click={invItemAtClick?.Name ?? "null"}  panelOpen={_panelOpen}",
-                LogLevel.Info);
+            ModEntry.DiagVerbose($"[Forge] *Prefix* click at ({x},{y})  cursor={Game1.player.CursorSlotItem?.Name ?? "null"}  forge.held={heldItem?.Name ?? "null"}  inv@click={invItemAtClick?.Name ?? "null"}  panelOpen={_panelOpen}");
             
             // DIAGNOSTIC: inspect inventory.highlightMethod
             var hlMethod = __instance.inventory.highlightMethod;
-            Log?.Log($"[Forge]   inventory.highlightMethod = {(hlMethod == null ? "null" : hlMethod.Method.Name)}", LogLevel.Info);
+            ModEntry.DiagVerbose($"[Forge]   inventory.highlightMethod = {(hlMethod == null ? "null" : hlMethod.Method.Name)}");
 
-            Log?.Log($"[Forge]   forge.leftIngredient={__instance.leftIngredientSpot.item?.Name ?? "null"}  forge.rightIngredient={__instance.rightIngredientSpot.item?.Name ?? "null"}",
-                LogLevel.Info);
+            ModEntry.DiagVerbose($"[Forge]   forge.leftIngredient={__instance.leftIngredientSpot.item?.Name ?? "null"}  forge.rightIngredient={__instance.rightIngredientSpot.item?.Name ?? "null"}");
 
             // === FULL FIELD DUMP ===
             // Walk ForgeMenu and all base classes' instance fields, print any that hold an Item.
@@ -515,7 +513,7 @@ namespace MultiRingInfiniteForging
                     {
                         var val = field.GetValue(__instance);
                         if (val is Item item)
-                            Log?.Log($"[Forge]   field {t.Name}.{field.Name} = Item({item.Name})", LogLevel.Info);
+                            ModEntry.DiagVerbose($"[Forge]   field {t.Name}.{field.Name} = Item({item.Name})");
                     }
                     catch { /* ignore */ }
                 }
@@ -534,7 +532,7 @@ namespace MultiRingInfiniteForging
                 if (cursorAny != null)
                 {
                     int invSwapIdx = __instance.inventory.getInventoryPositionOfClick(x, y);
-                    Log?.Log($"[Forge] Cursor-any swap path: cursor={cursorAny.Name}, invSwapIdx={invSwapIdx}", LogLevel.Info);
+                    ModEntry.DiagVerbose($"[Forge] Cursor-any swap path: cursor={cursorAny.Name}, invSwapIdx={invSwapIdx}");
                     if (invSwapIdx >= 0 && invSwapIdx < __instance.inventory.actualInventory.Count)
                     {
                         Item? existing = __instance.inventory.actualInventory[invSwapIdx];
@@ -543,7 +541,7 @@ namespace MultiRingInfiniteForging
                         bool swapOk = existing == null || IsValidForgeItem(__instance, existing);
                         if (!swapOk)
                         {
-                            Log?.Log($"[Forge] Cursor swap refused: inventory slot {invSwapIdx} holds non-forge item ({existing!.Name})", LogLevel.Info);
+                            ModEntry.DiagVerbose($"[Forge] Cursor swap refused: inventory slot {invSwapIdx} holds non-forge item ({existing!.Name})");
                             return false;
                         }
 
@@ -554,14 +552,40 @@ namespace MultiRingInfiniteForging
                             && __instance.leftIngredientSpot.item is Tool leftToolForSwap
                             && !CanRightItemEnchantTool(leftToolForSwap, existing))
                         {
-                            Log?.Log($"[Forge] Cursor swap refused: would lift no-op-ingredient ({existing.Name}) against {leftToolForSwap.Name}", LogLevel.Info);
+                            ModEntry.DiagVerbose($"[Forge] Cursor swap refused: would lift no-op-ingredient ({existing.Name}) against {leftToolForSwap.Name}");
                             return false;
+                        }
+                        
+                        // Guard 3: ring/non-ring mix prevention.
+                        // The swap would leave `existing` on the cursor.  If `existing` is a
+                        // non-Ring and a Ring is sitting in a forge slot, that's the broken
+                        // mix-and-match state.  Likewise if `existing` is a Ring while a
+                        // non-Ring is in a forge slot.  Refuse either case.
+                        if (existing != null)
+                        {
+                            bool ringInSlot =
+                                __instance.leftIngredientSpot.item  is Ring ||
+                                __instance.rightIngredientSpot.item is Ring;
+                            bool nonRingInSlot =
+                                (__instance.leftIngredientSpot.item  != null && __instance.leftIngredientSpot.item  is not Ring) ||
+                                (__instance.rightIngredientSpot.item != null && __instance.rightIngredientSpot.item is not Ring);
+
+                            if (ringInSlot && existing is not Ring)
+                            {
+                                ModEntry.DiagVerbose($"[Forge] Cursor swap refused: ring in forge slot, refusing to lift non-ring ({existing.Name}) onto cursor");
+                                return false;
+                            }
+                            if (nonRingInSlot && existing is Ring)
+                            {
+                                ModEntry.DiagVerbose($"[Forge] Cursor swap refused: non-ring in forge slot, refusing to lift ring ({existing.Name}) onto cursor");
+                                return false;
+                            }
                         }
 
                         __instance.inventory.actualInventory[invSwapIdx] = cursorAny;
                         Game1.player.CursorSlotItem = existing;
                         if (playSound) Game1.playSound("coin");
-                        Log?.Log($"[Forge] Cursor swap with inventory slot {invSwapIdx}: cursor was {cursorAny.Name}, now {existing?.Name ?? "null"}", LogLevel.Info);
+                        ModEntry.DiagVerbose($"[Forge] Cursor swap with inventory slot {invSwapIdx}: cursor was {cursorAny.Name}, now {existing?.Name ?? "null"}");
                         return false;
                     }
                 }
@@ -570,7 +594,7 @@ namespace MultiRingInfiniteForging
             {
                 var item = __instance.inventory.actualInventory[dbgI];
                 if (item != null)
-                    Log?.Log($"[Forge]   inv[{dbgI}] = {item.Name}", LogLevel.Info);
+                    ModEntry.DiagVerbose($"[Forge]   inv[{dbgI}] = {item.Name}");
             }
 
             // === BLOCK ACCUMULATING A SECOND ITEM ON EITHER CARRY ===
@@ -649,14 +673,12 @@ namespace MultiRingInfiniteForging
 
             if (carryingNonRing && wouldGrabRing)
             {
-                Log?.Log($"[Forge] Blocked: carrying non-ring (cursor={cursorItem?.Name ?? "null"}, held={heldItem?.Name ?? "null"}); refusing to pick up another ring",
-                    LogLevel.Info);
+                ModEntry.DiagVerbose($"[Forge] Blocked: carrying non-ring (cursor={cursorItem?.Name ?? "null"}, held={heldItem?.Name ?? "null"}); refusing to pick up another ring");
                 return false;
             }
             if (carryingRing && wouldGrabNonRing)
             {
-                Log?.Log($"[Forge] Blocked: carrying ring (cursor={cursorItem?.Name ?? "null"}, held={heldItem?.Name ?? "null"}); refusing to pick up a non-ring",
-                    LogLevel.Info);
+                ModEntry.DiagVerbose($"[Forge] Blocked: carrying ring (cursor={cursorItem?.Name ?? "null"}, held={heldItem?.Name ?? "null"}); refusing to pick up a non-ring");
                 return false;
             }
 
@@ -664,8 +686,7 @@ namespace MultiRingInfiniteForging
             // "greyed out" — block all ring pickups.
             if (nonRingInForgeSlot && wouldGrabRing)
             {
-                Log?.Log($"[Forge] Blocked: non-ring in forge slot (left={__instance.leftIngredientSpot.item?.Name ?? "null"}, right={__instance.rightIngredientSpot.item?.Name ?? "null"}); rings are greyed out",
-                    LogLevel.Info);
+                ModEntry.DiagVerbose($"[Forge] Blocked: non-ring in forge slot (left={__instance.leftIngredientSpot.item?.Name ?? "null"}, right={__instance.rightIngredientSpot.item?.Name ?? "null"}); rings are greyed out");
                 return false;
             }
             
@@ -674,8 +695,7 @@ namespace MultiRingInfiniteForging
             // create an invalid ring+sword combination in the forge.
             if (ringInForgeSlot && wouldGrabNonRing)
             {
-                Log?.Log($"[Forge] Blocked: ring in forge slot (left={__instance.leftIngredientSpot.item?.Name ?? "null"}, right={__instance.rightIngredientSpot.item?.Name ?? "null"}); non-rings are greyed out",
-                    LogLevel.Info);
+                ModEntry.DiagVerbose($"[Forge] Blocked: ring in forge slot (left={__instance.leftIngredientSpot.item?.Name ?? "null"}, right={__instance.rightIngredientSpot.item?.Name ?? "null"}); non-rings are greyed out");
                 return false;
             }
             
@@ -684,8 +704,7 @@ namespace MultiRingInfiniteForging
             // need to handle these ourselves when our promotion has moved a non-Ring item
             // onto the cursor.  This works for both Ring and non-Ring cursor items.
             Item? carriedAny = Game1.player.CursorSlotItem;
-            Log?.Log($"[Forge]   reached carriedAny block; carriedAny={carriedAny?.Name ?? "null"}  leftContains={__instance.leftIngredientSpot.containsPoint(x,y)}  rightContains={__instance.rightIngredientSpot.containsPoint(x,y)}",
-                LogLevel.Info);
+            ModEntry.DiagVerbose($"[Forge]   reached carriedAny block; carriedAny={carriedAny?.Name ?? "null"}  leftContains={__instance.leftIngredientSpot.containsPoint(x,y)}  rightContains={__instance.rightIngredientSpot.containsPoint(x,y)}");
             if (carriedAny != null)
             {
                 // Forge LEFT ingredient slot.
@@ -702,7 +721,7 @@ namespace MultiRingInfiniteForging
 
                     if (!acceptsInLeft)
                     {
-                        Log?.Log($"[Forge]   -> {carriedAny.Name} is not accepted in forge.left; blocking", LogLevel.Info);
+                        ModEntry.DiagVerbose($"[Forge]   -> {carriedAny.Name} is not accepted in forge.left; blocking");
                         return false;
                     }
 
@@ -715,7 +734,7 @@ namespace MultiRingInfiniteForging
                             Item? rightItem = __instance.rightIngredientSpot.item;
                             if (rightItem != null && !IsValidCraft(__instance, r, rightItem))
                             {
-                                Log?.Log($"[Forge]   -> ring+right={rightItem.Name} would be invalid; refusing", LogLevel.Info);
+                                ModEntry.DiagVerbose($"[Forge]   -> ring+right={rightItem.Name} would be invalid; refusing");
                                 return false;
                             }
                             // Prismatic Shard / Dragon Tooth never combine with rings — refuse
@@ -724,13 +743,13 @@ namespace MultiRingInfiniteForging
                                 && (rightItem.QualifiedItemId == "(O)74"
                                     || rightItem.QualifiedItemId == "(O)852"))
                             {
-                                Log?.Log($"[Forge]   -> ring+{rightItem.Name} is not a valid craft; refusing", LogLevel.Info);
+                                ModEntry.DiagVerbose($"[Forge]   -> ring+{rightItem.Name} is not a valid craft; refusing");
                                 return false;
                             }
                         }
                         __instance.leftIngredientSpot.item = carriedAny;
                         Game1.player.CursorSlotItem = null;
-                        Log?.Log($"[Forge]   -> placed {carriedAny.Name} in forge.left", LogLevel.Info);
+                        ModEntry.DiagVerbose($"[Forge]   -> placed {carriedAny.Name} in forge.left");
                         if (playSound) Game1.playSound("stoneStep");
                         return false;
                     }
@@ -738,7 +757,7 @@ namespace MultiRingInfiniteForging
                     // Slot is occupied: swap with the cursor.
                     __instance.leftIngredientSpot.item = carriedAny;
                     Game1.player.CursorSlotItem = leftExisting;
-                    Log?.Log($"[Forge]   -> swapped forge.left: was {leftExisting.Name}, now {carriedAny.Name}", LogLevel.Info);
+                    ModEntry.DiagVerbose($"[Forge]   -> swapped forge.left: was {leftExisting.Name}, now {carriedAny.Name}");
                     if (playSound) Game1.playSound("stoneStep");
                     return false;
                 }
@@ -755,7 +774,7 @@ namespace MultiRingInfiniteForging
                         && (carriedAny.QualifiedItemId == "(O)74"
                             || carriedAny.QualifiedItemId == "(O)852"))
                     {
-                        Log?.Log($"[Forge]   -> {carriedAny.Name} doesn't combine with a ring; refusing", LogLevel.Info);
+                        ModEntry.DiagVerbose($"[Forge]   -> {carriedAny.Name} doesn't combine with a ring; refusing");
                         return false;
                     }
                     
@@ -779,14 +798,14 @@ namespace MultiRingInfiniteForging
                             && leftItem is Tool leftTool
                             && !CanRightItemEnchantTool(leftTool, carriedAny))
                         {
-                            Log?.Log($"[Forge]   -> {carriedAny.Name} cannot enchant/forge {leftTool.Name} (no-op craft); refusing", LogLevel.Info);
+                            ModEntry.DiagVerbose($"[Forge]   -> {carriedAny.Name} cannot enchant/forge {leftTool.Name} (no-op craft); refusing");
                             return false;
                         }
                     }
 
                     if (!acceptsInRight)
                     {
-                        Log?.Log($"[Forge]   -> {carriedAny.Name} not accepted in forge.right (left={leftItem?.Name ?? "null"}); refusing", LogLevel.Info);
+                        ModEntry.DiagVerbose($"[Forge]   -> {carriedAny.Name} not accepted in forge.right (left={leftItem?.Name ?? "null"}); refusing");
                         return false;
                     }
 
@@ -794,7 +813,7 @@ namespace MultiRingInfiniteForging
                     {
                         __instance.rightIngredientSpot.item = carriedAny;
                         Game1.player.CursorSlotItem = null;
-                        Log?.Log($"[Forge]   -> placed {carriedAny.Name} in forge.right", LogLevel.Info);
+                        ModEntry.DiagVerbose($"[Forge]   -> placed {carriedAny.Name} in forge.right");
                         if (playSound) Game1.playSound("stoneStep");
                         return false;
                     }
@@ -802,7 +821,7 @@ namespace MultiRingInfiniteForging
                     // Swap.
                     __instance.rightIngredientSpot.item = carriedAny;
                     Game1.player.CursorSlotItem = rightExisting;
-                    Log?.Log($"[Forge]   -> swapped forge.right: was {rightExisting.Name}, now {carriedAny.Name}", LogLevel.Info);
+                    ModEntry.DiagVerbose($"[Forge]   -> swapped forge.right: was {rightExisting.Name}, now {carriedAny.Name}");
                     if (playSound) Game1.playSound("stoneStep");
                     return false;
                 }
@@ -811,13 +830,13 @@ namespace MultiRingInfiniteForging
             // === CURSOR-HELD RING DROP HANDLING ===
             if (Game1.player.CursorSlotItem is Ring carriedRing)
             {
-                Log?.Log($"[Forge] Click at ({x},{y}) carrying {carriedRing.Name}", LogLevel.Info);
+                ModEntry.DiagVerbose($"[Forge] Click at ({x},{y}) carrying {carriedRing.Name}");
 
                 // 1) Left Ring equipment icon (forge names it "Ring1").
                 var leftRingIcon = __instance.equipmentIcons.Find(c => c.name == "Ring1");
                 if (leftRingIcon != null && leftRingIcon.containsPoint(x, y))
                 {
-                    Log?.Log($"[Forge]   -> drop onto Left Ring icon", LogLevel.Info);
+                    ModEntry.DiagVerbose($"[Forge]   -> drop onto Left Ring icon");
                     Ring? existing = Game1.player.leftRing.Value;
                     existing?.onUnequip(Game1.player);
                     Game1.player.leftRing.Value = carriedRing;
@@ -831,7 +850,7 @@ namespace MultiRingInfiniteForging
                 var rightRingIcon = __instance.equipmentIcons.Find(c => c.name == "Ring2");
                 if (rightRingIcon != null && rightRingIcon.containsPoint(x, y))
                 {
-                    Log?.Log($"[Forge]   -> drop onto Right Ring icon", LogLevel.Info);
+                    ModEntry.DiagVerbose($"[Forge]   -> drop onto Right Ring icon");
                     Ring? existing = Game1.player.rightRing.Value;
                     existing?.onUnequip(Game1.player);
                     Game1.player.rightRing.Value = carriedRing;
@@ -850,13 +869,13 @@ namespace MultiRingInfiniteForging
                         Item? rightItem = __instance.rightIngredientSpot.item;
                         if (rightItem == null || IsValidCraft(__instance, carriedRing, rightItem))
                         {
-                            Log?.Log($"[Forge]   -> drop onto forge.left", LogLevel.Info);
+                            ModEntry.DiagVerbose($"[Forge]   -> drop onto forge.left");
                             __instance.leftIngredientSpot.item = carriedRing;
                             Game1.player.CursorSlotItem = null;
                             if (playSound) Game1.playSound("stoneStep");
                             return false;
                         }
-                        Log?.Log($"[Forge]   -> forge.left would create invalid combination with right={rightItem?.Name}; refusing", LogLevel.Info);
+                        ModEntry.DiagVerbose($"[Forge]   -> forge.left would create invalid combination with right={rightItem?.Name}; refusing");
                         return false;
                     }
                     // forge.left is occupied: only allow swap if it's a Ring (validating
@@ -868,14 +887,14 @@ namespace MultiRingInfiniteForging
                         Item? rightItem = __instance.rightIngredientSpot.item;
                         if (rightItem == null || IsValidCraft(__instance, carriedRing, rightItem))
                         {
-                            Log?.Log($"[Forge]   -> swap with forge.left (existing ring)", LogLevel.Info);
+                            ModEntry.DiagVerbose($"[Forge]   -> swap with forge.left (existing ring)");
                             __instance.leftIngredientSpot.item = carriedRing;
                             Game1.player.CursorSlotItem = leftItem;
                             if (playSound) Game1.playSound("crit");
                             return false;
                         }
                     }
-                    Log?.Log($"[Forge]   -> forge.left occupied with non-Ring or invalid pair; blocking click", LogLevel.Info);
+                    ModEntry.DiagVerbose($"[Forge]   -> forge.left occupied with non-Ring or invalid pair; blocking click");
                     return false;
                 }
 
@@ -889,13 +908,13 @@ namespace MultiRingInfiniteForging
                         // Vanilla allows placing a Ring in forge.right with empty forge.left.
                         if (leftItem == null || IsValidCraft(__instance, leftItem, carriedRing))
                         {
-                            Log?.Log($"[Forge]   -> drop onto forge.right", LogLevel.Info);
+                            ModEntry.DiagVerbose($"[Forge]   -> drop onto forge.right");
                             __instance.rightIngredientSpot.item = carriedRing;
                             Game1.player.CursorSlotItem = null;
                             if (playSound) Game1.playSound("stoneStep");
                             return false;
                         }
-                        Log?.Log($"[Forge]   -> forge.right would not form a valid craft with left={leftItem?.Name}; refusing", LogLevel.Info);
+                        ModEntry.DiagVerbose($"[Forge]   -> forge.right would not form a valid craft with left={leftItem?.Name}; refusing");
                         return false;
                     }
                     if (rightItem is Ring)
@@ -903,14 +922,14 @@ namespace MultiRingInfiniteForging
                         Item? leftItem = __instance.leftIngredientSpot.item;
                         if (leftItem == null || IsValidCraft(__instance, leftItem, carriedRing))
                         {
-                            Log?.Log($"[Forge]   -> swap with forge.right (existing ring)", LogLevel.Info);
+                            ModEntry.DiagVerbose($"[Forge]   -> swap with forge.right (existing ring)");
                             __instance.rightIngredientSpot.item = carriedRing;
                             Game1.player.CursorSlotItem = rightItem;
                             if (playSound) Game1.playSound("crit");
                             return false;
                         }
                     }
-                    Log?.Log($"[Forge]   -> forge.right occupied with non-Ring or invalid pair; blocking click", LogLevel.Info);
+                    ModEntry.DiagVerbose($"[Forge]   -> forge.right occupied with non-Ring or invalid pair; blocking click");
                     return false;
                 }
 
@@ -921,13 +940,13 @@ namespace MultiRingInfiniteForging
                     Item? existing = __instance.inventory.actualInventory[invIdx];
                     if (existing == null || IsValidForgeItem(__instance, existing))
                     {
-                        Log?.Log($"[Forge]   -> drop onto inventory slot {invIdx}", LogLevel.Info);
+                        ModEntry.DiagVerbose($"[Forge]   -> drop onto inventory slot {invIdx}");
                         __instance.inventory.actualInventory[invIdx] = carriedRing;
                         Game1.player.CursorSlotItem = existing;
                         if (playSound) Game1.playSound("coin");
                         return false;
                     }
-                    Log?.Log($"[Forge]   -> inventory slot {invIdx} holds non-forge item ({existing.Name}); not swapping", LogLevel.Info);
+                    ModEntry.DiagVerbose($"[Forge]   -> inventory slot {invIdx} holds non-forge item ({existing.Name}); not swapping");
                     return false;
                 }
 
@@ -940,7 +959,7 @@ namespace MultiRingInfiniteForging
                         int idx = SlotIndex(slot);
                         if (idx < 0) return true;
 
-                        Log?.Log($"[Forge]   -> drop onto panel slot {idx}", LogLevel.Info);
+                        ModEntry.DiagVerbose($"[Forge]   -> drop onto panel slot {idx}");
                         Ring? slotRing = RingSlotManager.Slots[idx];
                         RingSlotManager.Equip(idx, carriedRing);
                         Game1.player.CursorSlotItem = slotRing;
@@ -952,7 +971,7 @@ namespace MultiRingInfiniteForging
                 // Cursor is carrying a ring and click missed every drop target.
                 // Block the click entirely so vanilla doesn't pick up a second item
                 // (e.g. a sword from inventory) onto its private heldItem field.
-                Log?.Log($"[Forge]   -> no target found; blocking click while carrying ring", LogLevel.Info);
+                ModEntry.DiagVerbose($"[Forge]   -> no target found; blocking click while carrying ring");
                 return false;
             }
 
@@ -965,7 +984,7 @@ namespace MultiRingInfiniteForging
                 if (leftRingIcon != null && leftRingIcon.containsPoint(x, y)
                     && Game1.player.leftRing.Value is Ring leftRing)
                 {
-                    Log?.Log($"[Forge] Pick up Left Ring {leftRing.Name} to cursor", LogLevel.Info);
+                    ModEntry.DiagVerbose($"[Forge] Pick up Left Ring {leftRing.Name} to cursor");
                     leftRing.onUnequip(Game1.player);
                     Game1.player.leftRing.Value = null;
                     Game1.player.CursorSlotItem = leftRing;
@@ -977,7 +996,7 @@ namespace MultiRingInfiniteForging
                 if (rightRingIcon != null && rightRingIcon.containsPoint(x, y)
                     && Game1.player.rightRing.Value is Ring rightRing)
                 {
-                    Log?.Log($"[Forge] Pick up Right Ring {rightRing.Name} to cursor", LogLevel.Info);
+                    ModEntry.DiagVerbose($"[Forge] Pick up Right Ring {rightRing.Name} to cursor");
                     rightRing.onUnequip(Game1.player);
                     Game1.player.rightRing.Value = null;
                     Game1.player.CursorSlotItem = rightRing;
@@ -992,7 +1011,7 @@ namespace MultiRingInfiniteForging
                 if (__instance.leftIngredientSpot.containsPoint(x, y)
                     && __instance.leftIngredientSpot.item is Ring leftSlotRing)
                 {
-                    Log?.Log($"[Forge] Pick up forge.left {leftSlotRing.Name} to cursor", LogLevel.Info);
+                    ModEntry.DiagVerbose($"[Forge] Pick up forge.left {leftSlotRing.Name} to cursor");
                     __instance.leftIngredientSpot.item = null;
                     Game1.player.CursorSlotItem = leftSlotRing;
                     if (playSound) Game1.playSound("crit");
@@ -1003,7 +1022,7 @@ namespace MultiRingInfiniteForging
                 if (__instance.rightIngredientSpot.containsPoint(x, y)
                     && __instance.rightIngredientSpot.item is Ring rightSlotRing)
                 {
-                    Log?.Log($"[Forge] Pick up forge.right {rightSlotRing.Name} to cursor", LogLevel.Info);
+                    ModEntry.DiagVerbose($"[Forge] Pick up forge.right {rightSlotRing.Name} to cursor");
                     __instance.rightIngredientSpot.item = null;
                     Game1.player.CursorSlotItem = rightSlotRing;
                     if (playSound) Game1.playSound("crit");
@@ -1016,7 +1035,7 @@ namespace MultiRingInfiniteForging
                     && invPickIdx < __instance.inventory.actualInventory.Count
                     && __instance.inventory.actualInventory[invPickIdx] is Ring invRing)
                 {
-                    Log?.Log($"[Forge] Pick up inventory ring {invRing.Name} (slot {invPickIdx}) to cursor", LogLevel.Info);
+                    ModEntry.DiagVerbose($"[Forge] Pick up inventory ring {invRing.Name} (slot {invPickIdx}) to cursor");
                     __instance.inventory.actualInventory[invPickIdx] = null;
                     Game1.player.CursorSlotItem = invRing;
                     if (playSound) Game1.playSound("crit");
@@ -1033,7 +1052,7 @@ namespace MultiRingInfiniteForging
                     Ring? slotRing = RingSlotManager.Slots[idx];
                     if (slotRing == null) return false;
 
-                    Log?.Log($"[Forge] Pick up panel slot {idx} {slotRing.Name} to cursor", LogLevel.Info);
+                    ModEntry.DiagVerbose($"[Forge] Pick up panel slot {idx} {slotRing.Name} to cursor");
                     RingSlotManager.Equip(idx, null);
                     Game1.player.CursorSlotItem = slotRing;
                     if (playSound) Game1.playSound("crit");
@@ -1247,8 +1266,7 @@ namespace MultiRingInfiniteForging
         public static void LeftClick_Postfix(ForgeMenu __instance, int x, int y)
         {
             var held = GetHeldItem(__instance);
-            Log?.Log($"[Forge] *Postfix* click at ({x},{y})  cursor={Game1.player.CursorSlotItem?.Name ?? "null"}  forge.held={held?.Name ?? "null"}  forge.left={__instance.leftIngredientSpot.item?.Name ?? "null"}  forge.right={__instance.rightIngredientSpot.item?.Name ?? "null"}",
-                LogLevel.Info);
+            ModEntry.DiagVerbose($"[Forge] *Postfix* click at ({x},{y})  cursor={Game1.player.CursorSlotItem?.Name ?? "null"}  forge.held={held?.Name ?? "null"}  forge.left={__instance.leftIngredientSpot.item?.Name ?? "null"}  forge.right={__instance.rightIngredientSpot.item?.Name ?? "null"}");
         }
 
         // NEW: track _heldItem transitions during update().  Only log when it changes,
@@ -1264,12 +1282,12 @@ namespace MultiRingInfiniteForging
 
             if (heldName != _lastHeldName)
             {
-                Log?.Log($"[Forge] update: forge.held transitioned {_lastHeldName ?? "(init)"} -> {heldName}", LogLevel.Info);
+                ModEntry.DiagVerbose($"[Forge] update: forge.held transitioned {_lastHeldName ?? "(init)"} -> {heldName}");
                 _lastHeldName = heldName;
             }
             if (craftResultName != _lastCraftResultName)
             {
-                Log?.Log($"[Forge] update: craftResultDisplay transitioned {_lastCraftResultName ?? "(init)"} -> {craftResultName}", LogLevel.Info);
+                ModEntry.DiagVerbose($"[Forge] update: craftResultDisplay transitioned {_lastCraftResultName ?? "(init)"} -> {craftResultName}");
                 _lastCraftResultName = craftResultName;
             }
         }
