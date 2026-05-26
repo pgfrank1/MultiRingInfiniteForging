@@ -4,6 +4,7 @@ using HarmonyLib;
 using StardewModdingAPI;
 using StardewValley;
 using StardewValley.Menus;
+using StardewValley.Monsters;
 using StardewValley.Objects;
 using StardewValley.Tools;
 
@@ -49,6 +50,33 @@ namespace MultiRingInfiniteForging
             catch (Exception ex)
             {
                 Log.Log("Farmer.GetEquippedItems patching failed: " + ex.Message, LogLevel.Warn);
+            }
+            // 1c) Forward onMonsterSlay to extra-slot rings.  Vanilla calls
+            //     leftRing.Value?.onMonsterSlay(...) / rightRing.Value?.onMonsterSlay(...)
+            //     inside GameLocation when a monster dies; without this patch Vampire,
+            //     Warrior, Savage, Soul Sapper, Napalm, Hot Java effects don't fire
+            //     from extra slots.  We hook the simpler choke point: Monster.deathAnimation
+            //     is called once per kill on the dying monster.  Using a postfix on
+            //     GameLocation.monsterDrop would be equivalent.
+            try
+            {
+                var monsterDrop = AccessTools.Method(typeof(GameLocation), "monsterDrop");
+                if (monsterDrop != null)
+                {
+                    harmony.Patch(
+                        original: monsterDrop,
+                        postfix: new HarmonyMethod(typeof(Patches), nameof(MonsterDrop_Postfix))
+                    );
+                    Log.Log("Patched GameLocation.monsterDrop successfully.", LogLevel.Info);
+                }
+                else
+                {
+                    Log.Log("Could not find GameLocation.monsterDrop to patch.", LogLevel.Warn);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Log("GameLocation.monsterDrop patching failed: " + ex.Message, LogLevel.Warn);
             }
 
             // 2) Add extra ring slots into the vanilla inventory/equipment page.
@@ -247,6 +275,17 @@ namespace MultiRingInfiniteForging
                 }
             }
         }
+        /// <summary>Forward monster-killed events to extra-slot rings.  Vanilla calls
+        /// leftRing/rightRing.onMonsterSlay from the same code block as monsterDrop;
+        /// hooking monsterDrop's postfix lets us mirror that call for our extra rings.</summary>
+        public static void MonsterDrop_Postfix(GameLocation __instance, Monster monster, int x, int y, Farmer who)
+        {
+            if (who == null || monster == null) return;
+            // Only the local player has extra-slot ring data on this client.
+            if (who != Game1.player) return;
+            RingSlotManager.OnMonsterSlay(monster, __instance, who);
+        }
+        
         /// <summary>Append extra-slot rings to Farmer.GetEquippedItems so vanilla's
         /// BuffManager / enchantment loops pick up their AddEquipmentEffects
         /// contribution.  This is the canonical wiring for every passive ring stat
@@ -254,30 +293,17 @@ namespace MultiRingInfiniteForging
         /// Crabshell +5 Def, Lucky Ring, Immunity Band, etc.).</summary>
         public static IEnumerable<Item> GetEquippedItems_Postfix(IEnumerable<Item> __result, Farmer __instance)
         {
-            // DIAG: confirm the postfix is firing and which farmer it's running for.
-            bool isLocal = __instance == Game1.player;
-            int extraCount = 0;
-            foreach (var r in RingSlotManager.Slots)
-                if (r != null) extraCount++;
-            ModEntry.Instance.Monitor.Log(
-                $"[Diag] GetEquippedItems postfix: farmer={__instance?.Name ?? "null"} " +
-                $"isLocal={isLocal} extraRings={extraCount}/{RingSlotManager.Slots.Count}",
-                LogLevel.Info);
-
             foreach (var item in __result)
                 yield return item;
 
+            // Only contribute our extra rings for the local player; remote farmers
+            // don't have ExtraRings data on this client.
             if (__instance != Game1.player) yield break;
 
             foreach (var ring in RingSlotManager.Slots)
             {
                 if (ring != null)
-                {
-                    ModEntry.Instance.Monitor.Log(
-                        $"[Diag] GetEquippedItems yielding extra ring: {ring.DisplayName} ({ring.QualifiedItemId})",
-                        LogLevel.Info);
                     yield return ring;
-                }
             }
         }
 
