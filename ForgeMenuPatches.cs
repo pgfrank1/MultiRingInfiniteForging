@@ -1077,9 +1077,7 @@ namespace MultiRingInfiniteForging
         /// "no-op" forges that would otherwise consume the right item with no result.</summary>
         internal static bool CanRightItemEnchantTool(Tool leftTool, Item rightItem)
         {
-            // Same-type weapon: vanilla's "appearance copy" forge.  Infinity Sword + any
-            // other Sword copies the right weapon's sprite onto the left.  This is a
-            // valid craft and produces a visible change (appearance), so allow it.
+            // Same-type weapon: vanilla's "appearance copy" forge.
             if (leftTool is StardewValley.Tools.MeleeWeapon leftWeapon
                 && rightItem is StardewValley.Tools.MeleeWeapon rightWeapon
                 && rightWeapon.type.Value == leftWeapon.type.Value
@@ -1089,32 +1087,67 @@ namespace MultiRingInfiniteForging
                 return true;
             }
 
-            // Prismatic Shard: applies a random secondary/innate enchantment from the
-            // tool's available list.  If that list is empty, the forge produces null
-            // and the tool/shard would be lost — refuse.
+            // Prismatic Shard: applies a random secondary/innate enchantment.
             if (rightItem.QualifiedItemId == "(O)74")
             {
-                var available = StardewValley.Enchantments.BaseEnchantment
-                    .GetAvailableEnchantmentsForItem(leftTool);
-                return available != null && available.Count > 0;
+                if (ModEntry.Instance.Config.MultipleEnchantments)
+                {
+                    var available = StardewValley.Enchantments.BaseEnchantment
+                        .GetAvailableEnchantmentsForItem(leftTool);
+                    return available != null && available.Count > 0;
+                }
+
+                var allEnch = StardewValley.Enchantments.BaseEnchantment.GetAvailableEnchantments();
+                foreach (var ench in allEnch)
+                {
+                    if (ench.IsForge() || ench.IsSecondaryEnchantment()) continue;
+                    if (ench.CanApplyTo(leftTool)) return true;
+                }
+                return false;
             }
 
-            // Dragon Tooth: re-rolls the secondary enchantment on a non-scythe, non-Galaxy
-            // MeleeWeapon below level 15.
+            // Dragon Tooth: re-rolls the secondary enchantment on a MeleeWeapon.
+            // Vanilla restricts this to non-Galaxy weapons below level 15.  We allow
+            // it on Infinity weapons too as a mod feature — re-rolling the innate
+            // enchantment on a fully-evolved Infinity weapon is a useful endgame
+            // ability that vanilla just forgot about.
             if (rightItem.QualifiedItemId == "(O)852")
             {
-                return leftTool is StardewValley.Tools.MeleeWeapon weapon
-                       && !weapon.isScythe()
-                       && weapon.getItemLevel() < 15
-                       && !weapon.Name.Contains("Galaxy");
+                if (leftTool is not StardewValley.Tools.MeleeWeapon weapon) return false;
+                if (weapon.isScythe()) return false;
+                return true;
+
+                // Vanilla rule: pre-Galaxy weapon below level 15 — straightforward.
+                //if (!weapon.Name.Contains("Galaxy") && weapon.getItemLevel() < 15)
+
+                // Mod extension: Infinity / fully-evolved Galaxy weapons can also re-roll
+                // their secondary enchantment.  Refuse if the weapon has no secondary
+                // enchantment to re-roll (other than GalaxySoul, which is permanent).
+                foreach (var ench in weapon.enchantments)
+                {
+                    if (ench.IsSecondaryEnchantment()
+                        && ench is not StardewValley.Enchantments.GalaxySoulEnchantment)
+                    {
+                        return true;
+                    }
+                }
+                return false;
             }
 
-            // Diamond: vanilla's Forge picks from the 6 gem-enchantment types but skips
-            // any already on the tool.  Once all 6 are applied, a Diamond craft is a
-            // no-op (consumes the Diamond + shards, adds nothing).  Refuse.
+            // Diamond: weapon-only.  Gems boost weapon stats (damage/defense/crit/speed)
+            // and have no effect on Pickaxe/Hoe/Axe/Pan/Rod/Watering Can.
             if (rightItem.QualifiedItemId == "(O)72")
             {
-                if (leftTool is StardewValley.Tools.MeleeWeapon scytheCheck && scytheCheck.isScythe())
+                if (leftTool is not StardewValley.Tools.MeleeWeapon scytheCheck)
+                    return false;
+                if (scytheCheck.isScythe())
+                    return false;
+                
+                // Respect the forge-level cap: when InfiniteWeaponForging is off,
+                // vanilla caps total forges at GetMaxForges() (default 3).  A Diamond
+                // craft at the cap is a no-op (consumes the diamond + shards, adds
+                // nothing).  Refuse.
+                if (leftTool.GetTotalForgeLevels() >= leftTool.GetMaxForges())
                     return false;
 
                 bool anyMissing =
@@ -1127,10 +1160,11 @@ namespace MultiRingInfiniteForging
                 return anyMissing;
             }
 
-            // Gem (Ruby/Emerald/Topaz/Aquamarine/Jade/Amethyst): produces a forge
-            // enchantment.  Scythes can't be gem-forged.  Otherwise defer to vanilla's
-            // CanAddEnchantment, which respects our infinite-forging patch.
-            if (leftTool is StardewValley.Tools.MeleeWeapon meleeForGem && meleeForGem.isScythe())
+            // Gems (Ruby/Emerald/Topaz/Aquamarine/Jade/Amethyst): weapon-only.  Same
+            // reasoning as Diamond — these are weapon-stat enchantments.
+            if (leftTool is not StardewValley.Tools.MeleeWeapon meleeForGem)
+                return false;
+            if (meleeForGem.isScythe())
                 return false;
 
             var enchantment = StardewValley.Enchantments.BaseEnchantment

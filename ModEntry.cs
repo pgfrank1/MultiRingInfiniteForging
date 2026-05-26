@@ -25,6 +25,7 @@ namespace MultiRingInfiniteForging
             helper.Events.GameLoop.SaveLoaded += OnSaveLoaded;
             helper.Events.GameLoop.Saving += OnSaving;
             helper.Events.GameLoop.DayEnding += OnDayEnding;
+            helper.Events.GameLoop.OneSecondUpdateTicked += OnOneSecondTick;
             helper.Events.Input.ButtonPressed += OnButtonPressed;
 
             var harmony = new Harmony(ModManifest.UniqueID);
@@ -38,6 +39,24 @@ namespace MultiRingInfiniteForging
                 mod: this,
                 config: Config,
                 save: () => Helper.WriteConfig(Config));
+        }
+        
+        /// <summary>Periodic diagnostic snapshot of the player's combined buff state.
+        /// Used to verify that extra-slot rings are flowing through AddEquipmentEffects.</summary>
+        private void OnOneSecondTick(object? sender, StardewModdingAPI.Events.OneSecondUpdateTickedEventArgs e)
+        {
+            if (!Context.IsWorldReady || Game1.player == null) return;
+
+            int extra = 0;
+            foreach (var r in RingSlotManager.Slots)
+                if (r != null) extra++;
+            if (extra == 0) return; // nothing to log about
+
+            Monitor.Log(
+                $"[Diag] tick snapshot: MagneticRadius={Game1.player.MagneticRadius} " +
+                $"Immunity={Game1.player.Immunity} buffs.Dirty already-recomputed " +
+                $"(extra rings={extra})",
+                LogLevel.Trace);
         }
 
         /// <summary>If an extra-ring panel is open and the player presses B (cancel) on the

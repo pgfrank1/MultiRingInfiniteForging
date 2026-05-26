@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using HarmonyLib;
 using StardewModdingAPI;
 using StardewValley;
@@ -21,6 +22,34 @@ namespace MultiRingInfiniteForging
                 original: AccessTools.Method(typeof(Farmer), nameof(Farmer.isWearingRing)),
                 postfix: new HarmonyMethod(typeof(Patches), nameof(IsWearingRing_Postfix))
             );
+
+            // 1b) Make Farmer.GetEquippedItems include our extra rings.  This is the
+            //     master pipeline: BuffManager.GetValues() iterates GetEquippedItems()
+            //     and calls AddEquipmentEffects on each, which is how rings contribute
+            //     magnetic radius, defense, attack/crit/knockback/speed multipliers,
+            //     luck, immunity, etc.  Without this, extra-slot rings appear equipped
+            //     but provide no passive stat bonuses.  CombinedRing.AddEquipmentEffects
+            //     recurses internally, so nested rings inside CombinedRings also work.
+            try
+            {
+                var getEquipped = AccessTools.Method(typeof(Farmer), nameof(Farmer.GetEquippedItems));
+                if (getEquipped != null)
+                {
+                    harmony.Patch(
+                        original: getEquipped,
+                        postfix: new HarmonyMethod(typeof(Patches), nameof(GetEquippedItems_Postfix))
+                    );
+                    Log.Log("Patched Farmer.GetEquippedItems successfully.", LogLevel.Info);
+                }
+                else
+                {
+                    Log.Log("Could not find Farmer.GetEquippedItems to patch.", LogLevel.Warn);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Log("Farmer.GetEquippedItems patching failed: " + ex.Message, LogLevel.Warn);
+            }
 
             // 2) Add extra ring slots into the vanilla inventory/equipment page.
             InventoryPagePatches.Apply(harmony, monitor);
@@ -155,6 +184,51 @@ namespace MultiRingInfiniteForging
             {
                 Log.Log("Tool.Forge (Diamond cap) patching failed: " + ex.Message, LogLevel.Warn);
             }
+            // 10) Prismatic Shard re-roll on fully-enchanted tools when
+            //     MultipleEnchantments is disabled.  Vanilla's Tool.Forge returns
+            //     null when the enchantment pool is empty, which would delete the
+            //     tool via the null-craft-result path.  Pre-empt that by manually
+            //     clearing existing tool enchantments first.
+            try
+            {
+                var forgeMethod = AccessTools.Method(typeof(Tool),
+                    nameof(Tool.Forge));
+                if (forgeMethod != null)
+                {
+                    harmony.Patch(
+                        original: forgeMethod,
+                        prefix: new HarmonyMethod(typeof(Patches), nameof(Tool_Forge_PrismaticReroll_Prefix))
+                    );
+                    Log.Log("Patched Tool.Forge (Prismatic re-roll) successfully.", LogLevel.Info);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Log("Tool.Forge (Prismatic re-roll) patching failed: " + ex.Message, LogLevel.Warn);
+            }
+            // 11) Dragon Tooth re-roll on Infinity / fully-evolved Galaxy weapons.
+            //     Vanilla refuses this combination (Tool.CanForge restricts to
+            //     name-doesn't-contain-Galaxy AND level < 15) — but the mechanic is
+            //     useful as an endgame mod feature.  We allow the drop via
+            //     CanRightItemEnchantTool; this prefix executes the re-roll mechanic
+            //     in cases vanilla would otherwise skip.
+            try
+            {
+                var forgeMethod = AccessTools.Method(typeof(Tool),
+                    nameof(Tool.Forge));
+                if (forgeMethod != null)
+                {
+                    harmony.Patch(
+                        original: forgeMethod,
+                        prefix: new HarmonyMethod(typeof(Patches), nameof(Tool_Forge_DragonToothReroll_Prefix))
+                    );
+                    Log.Log("Patched Tool.Forge (Dragon Tooth Infinity re-roll) successfully.", LogLevel.Info);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Log("Tool.Forge (Dragon Tooth Infinity re-roll) patching failed: " + ex.Message, LogLevel.Warn);
+            }
         }
 
         
@@ -170,6 +244,39 @@ namespace MultiRingInfiniteForging
                 {
                     __result = true;
                     return;
+                }
+            }
+        }
+        /// <summary>Append extra-slot rings to Farmer.GetEquippedItems so vanilla's
+        /// BuffManager / enchantment loops pick up their AddEquipmentEffects
+        /// contribution.  This is the canonical wiring for every passive ring stat
+        /// (Topaz +Defense, Aquamarine +Crit, Ruby +Attack, Magnet/Iridium Band radius,
+        /// Crabshell +5 Def, Lucky Ring, Immunity Band, etc.).</summary>
+        public static IEnumerable<Item> GetEquippedItems_Postfix(IEnumerable<Item> __result, Farmer __instance)
+        {
+            // DIAG: confirm the postfix is firing and which farmer it's running for.
+            bool isLocal = __instance == Game1.player;
+            int extraCount = 0;
+            foreach (var r in RingSlotManager.Slots)
+                if (r != null) extraCount++;
+            ModEntry.Instance.Monitor.Log(
+                $"[Diag] GetEquippedItems postfix: farmer={__instance?.Name ?? "null"} " +
+                $"isLocal={isLocal} extraRings={extraCount}/{RingSlotManager.Slots.Count}",
+                LogLevel.Info);
+
+            foreach (var item in __result)
+                yield return item;
+
+            if (__instance != Game1.player) yield break;
+
+            foreach (var ring in RingSlotManager.Slots)
+            {
+                if (ring != null)
+                {
+                    ModEntry.Instance.Monitor.Log(
+                        $"[Diag] GetEquippedItems yielding extra ring: {ring.DisplayName} ({ring.QualifiedItemId})",
+                        LogLevel.Info);
+                    yield return ring;
                 }
             }
         }
@@ -192,11 +299,26 @@ namespace MultiRingInfiniteForging
             // Only relevant when vanilla originally said "yes" — if it already said "no",
             // there's nothing for us to suppress.
             if (__result
-                && left_item is Tool leftTool
+                && left_item is Tool leftToolDemote
                 && right_item != null
-                && !ForgeMenuPatches.CanRightItemEnchantTool(leftTool, right_item))
+                && !ForgeMenuPatches.CanRightItemEnchantTool(leftToolDemote, right_item))
             {
                 __result = false;
+                return;
+            }
+            
+            // Override 3: Allow tool crafts vanilla refused but our mod can handle.
+            // With MultipleEnchantments=false, a Prismatic Shard on a fully-enchanted
+            // tool is valid in our world because vanilla's AddEnchantment clears the
+            // existing tool enchantment before re-applying.  Vanilla refuses because
+            // GetEnchantmentFromItem returns null, but our CanRightItemEnchantTool
+            // knows the craft will produce a result after the clear+reapply.
+            if (!__result
+                && left_item is Tool leftToolPromote
+                && right_item != null
+                && ForgeMenuPatches.CanRightItemEnchantTool(leftToolPromote, right_item))
+            {
+                __result = true;
             }
         }
 
@@ -218,11 +340,32 @@ namespace MultiRingInfiniteForging
                 Item? leftItem  = __instance.leftIngredientSpot.item;
                 Item? rightItem = __instance.rightIngredientSpot.item;
 
-                // Case 1: Ring in left slot.  Only highlight rings — prismatic shards
-                // and dragon teeth don't combine with rings.
+                // Case 1: Ring in left slot.  Highlight only rings that would form
+                // a valid ring+ring combine with the left ring.  Without InfiniteCombining,
+                // vanilla restricts to "uncombined + uncombined of different IDs"; with
+                // InfiniteCombining our Forge_IsValidCraft_Postfix override allows any
+                // ring+ring.  Either way, defer to IsValidCraft for the decision.
                 if (leftItem is Ring)
                 {
-                    __result = i is Ring;
+                    if (i is not Ring)
+                    {
+                        __result = false;
+                        return;
+                    }
+
+                    bool valid = false;
+                    try
+                    {
+                        var isValidCraft = AccessTools.Method(typeof(ForgeMenu), "IsValidCraft");
+                        if (isValidCraft != null)
+                        {
+                            var ret = isValidCraft.Invoke(__instance, new object?[] { leftItem, i });
+                            if (ret is bool b) valid = b;
+                        }
+                    }
+                    catch { /* leave valid = false */ }
+
+                    __result = valid;
                     return;
                 }
 
@@ -242,10 +385,26 @@ namespace MultiRingInfiniteForging
                     }
                     catch { /* leave valid = false */ }
 
-                    if (valid && leftItem is Tool leftTool
-                              && !ForgeMenuPatches.CanRightItemEnchantTool(leftTool, i))
+                    // Demote: dim items that would produce a no-op craft (e.g. Diamond
+                    // on a tool that already has all 6 gem enchantments).
+                    if (valid && leftItem is Tool leftToolDemote
+                              && !ForgeMenuPatches.CanRightItemEnchantTool(leftToolDemote, i))
                     {
                         valid = false;
+                    }
+
+                    // Promote: highlight items that vanilla rejects but our mod accepts.
+                    // Specifically: with MultipleEnchantments=false, vanilla refuses a
+                    // Prismatic Shard on a fully-enchanted tool because
+                    // GetEnchantmentFromItem returns null (the available pool is empty
+                    // after filtering applied types).  But vanilla's AddEnchantment will
+                    // CLEAR the existing tool enchantment before applying the new one,
+                    // so the craft does produce a result — CanRightItemEnchantTool
+                    // simulates that.  If our gate says yes, override vanilla's "no".
+                    if (!valid && leftItem is Tool leftToolPromote
+                               && ForgeMenuPatches.CanRightItemEnchantTool(leftToolPromote, i))
+                    {
+                        valid = true;
                     }
 
                     __result = valid;
@@ -270,11 +429,18 @@ namespace MultiRingInfiniteForging
                     }
                     catch { /* leave valid = false */ }
 
-                    // Also dim if the (i, rightItem) pair would be a no-op craft.
-                    if (valid && i is Tool prospectiveLeftTool
-                              && !ForgeMenuPatches.CanRightItemEnchantTool(prospectiveLeftTool, rightItem))
+                    // Demote: no-op craft.
+                    if (valid && i is Tool prospectiveLeftToolDemote
+                              && !ForgeMenuPatches.CanRightItemEnchantTool(prospectiveLeftToolDemote, rightItem))
                     {
                         valid = false;
+                    }
+
+                    // Promote: re-roll case (see Case 2 comment).
+                    if (!valid && i is Tool prospectiveLeftToolPromote
+                               && ForgeMenuPatches.CanRightItemEnchantTool(prospectiveLeftToolPromote, rightItem))
+                    {
+                        valid = true;
                     }
 
                     __result = valid;
@@ -335,15 +501,15 @@ namespace MultiRingInfiniteForging
         /// DiamondEnchantment from the tool.  Vanilla leaves it on so the tooltip
         /// displays "+N Random Forges" (where N = GetMaxForges() - GetTotalForgeLevels()).
         /// With InfiniteWeaponForging that displays as "+2147483641 Random Forges"
-        /// because GetMaxForges() is int.MaxValue.  Remove it so the tooltip is clean
-        /// and players can later forge another Diamond without the misleading line.</summary>
+        /// because GetMaxForges() is int.MaxValue.  Without InfiniteWeaponForging the
+        /// tooltip ends up at "+0 Random Forges" once the tool hits the 3-gem cap.
+        /// Either way the line is misleading — strip the marker so the tooltip is clean.</summary>
         public static void Tool_Forge_Postfix(Tool __instance, Item item, bool __result)
         {
             if (!__result) return;
             if (item?.QualifiedItemId != "(O)72") return;
-            if (!ModEntry.Instance.Config.InfiniteWeaponForging) return;
 
-            // Remove the DiamondEnchantment marker.
+            // Remove the DiamondEnchantment marker (works regardless of config).
             for (int i = __instance.enchantments.Count - 1; i >= 0; i--)
             {
                 if (__instance.enchantments[i] is StardewValley.Enchantments.DiamondEnchantment)
@@ -412,6 +578,83 @@ namespace MultiRingInfiniteForging
 
             __result = forgesLeft > 0;   // success only if we actually applied something
             return false;                // skip the vanilla method
+        }
+        /// <summary>When MultipleEnchantments is disabled and a Prismatic Shard is
+        /// forged onto a tool with every applicable enchantment already applied,
+        /// vanilla's Tool.Forge would return null (empty pool) and the craft would
+        /// delete the tool.  Pre-clear the tool's existing tool-style enchantments so
+        /// vanilla's GetEnchantmentFromItem finds a candidate.</summary>
+        public static bool Tool_Forge_PrismaticReroll_Prefix(
+            Tool __instance, Item item)
+        {
+            if (ModEntry.Instance.Config.MultipleEnchantments)
+                return true; // stacking mode — pass through
+            if (item?.QualifiedItemId != "(O)74")
+                return true; // not a Prismatic Shard
+
+            // Check whether vanilla's pool would be empty.
+            var available = StardewValley.Enchantments.BaseEnchantment
+                .GetAvailableEnchantmentsForItem(__instance);
+            if (available != null && available.Count > 0)
+                return true; // pool non-empty — vanilla handles it normally
+
+            // Pool is empty — manually clear existing tool-style enchantments so
+            // vanilla's next call to GetAvailableEnchantmentsForItem finds candidates.
+            for (int i = __instance.enchantments.Count - 1; i >= 0; i--)
+            {
+                var ench = __instance.enchantments[i];
+                if (!ench.IsForge() && !ench.IsSecondaryEnchantment())
+                {
+                    ench.UnapplyTo(__instance);
+                    __instance.enchantments.RemoveAt(i);
+                }
+            }
+
+            // Let vanilla proceed; it'll now find a fresh enchantment from the pool.
+            return true;
+        }
+        /// <summary>Vanilla refuses Dragon Tooth on Galaxy/Infinity weapons via
+        /// Tool.CanForge's name check.  Our gate accepts the drop; this prefix
+        /// performs the re-roll using the same logic vanilla's non-Galaxy path uses
+        /// (strip existing innate stat enchantments via IsSecondaryEnchantment(),
+        /// then attemptAddRandomInnateEnchantment to add a fresh one).  Named
+        /// secondary enchantments like Vampiric return IsSecondaryEnchantment()==false
+        /// and are preserved automatically.</summary>
+        public static bool Tool_Forge_DragonToothReroll_Prefix(
+            Tool __instance, Item item, ref bool __result)
+        {
+            if (item?.QualifiedItemId != "(O)852")
+                return true; // not a Dragon Tooth — let vanilla handle
+            if (__instance is not MeleeWeapon weapon)
+                return true;
+            if (weapon.isScythe())
+                return true;
+
+            // For non-Galaxy weapons below level 15, vanilla's existing path works
+            // correctly — leave it alone.
+            if (!weapon.Name.Contains("Galaxy") && weapon.getItemLevel() < 15)
+                return true;
+
+            // Mod extension: Galaxy/Infinity weapons.  Replicate vanilla's behaviour
+            // here since vanilla's CanForge refuses.
+            List<StardewValley.Enchantments.BaseEnchantment> oldInnate = new();
+            for (int i = weapon.enchantments.Count - 1; i >= 0; i--)
+            {
+                var ench = weapon.enchantments[i];
+                if (ench.IsSecondaryEnchantment()
+                    && ench is not StardewValley.Enchantments.GalaxySoulEnchantment)
+                {
+                    oldInnate.Add(ench);
+                    ench.UnapplyTo(weapon);
+                    weapon.enchantments.RemoveAt(i);
+                }
+            }
+
+            MeleeWeapon.attemptAddRandomInnateEnchantment(
+                weapon, Game1.random, force: true, oldInnate);
+
+            __result = true;
+            return false; // skip vanilla
         }
     }
 }
