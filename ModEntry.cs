@@ -77,6 +77,12 @@ namespace MultiRingInfiniteForging
                 documentation:
                 "Multi Ring Infinite Forging: dump the local player's current ring-derived stats (defense, attack, magnetic radius, crit, luck, immunity, etc.).",
                 callback: DumpStatsCommand);
+            helper.ConsoleCommands.Add(
+                name: "mrif_drain",
+                documentation:
+                "Multi Ring Infinite Forging: return every extra-slot ring to your inventory (or drop at your feet if full). " +
+                "Run this before uninstalling the mod to avoid losing rings stored in extra slots.",
+                callback: DrainCommand);
         }
         
         /// <summary>Console command: prints the current values of all buff-aggregated
@@ -126,6 +132,32 @@ namespace MultiRingInfiniteForging
             b.Dirty = true;
             Monitor.Log("(buffs marked dirty for next-access recompute)", LogLevel.Info);
         }
+        
+        /// <summary>Console command: pulls every extra-slot ring back to the player's
+        /// inventory, with overflow dropped at their feet.  Designed as the "before
+        /// you uninstall" safety net — rings stored in our SMAPI data dictionary are
+        /// unreachable without this mod loaded, so the user must run this first.</summary>
+        private void DrainCommand(string name, string[] args)
+        {
+            if (!Context.IsWorldReady || Game1.player == null)
+            {
+                Monitor.Log("No player loaded.  Load a save before running mrif_drain.", LogLevel.Warn);
+                return;
+            }
+
+            int drained = RingSlotManager.DrainAllToPlayer();
+            if (drained == 0)
+            {
+                Monitor.Log("No extra-slot rings to drain.", LogLevel.Info);
+            }
+            else
+            {
+                Monitor.Log($"Drained {drained} ring(s) back to player inventory / ground.", LogLevel.Info);
+                Game1.addHUDMessage(new HUDMessage(
+                    $"{drained} extra-slot ring(s) returned to inventory.",
+                    HUDMessage.newQuest_type));
+            }
+        }
 
         private void OnGameLaunched(object? sender, GameLaunchedEventArgs e)
         {
@@ -133,7 +165,11 @@ namespace MultiRingInfiniteForging
             GenericModConfigMenuIntegration.Register(
                 mod: this,
                 config: Config,
-                save: () => Helper.WriteConfig(Config));
+                save: () =>
+                {
+                    Helper.WriteConfig(Config);
+                    RingSlotManager.EnsureSize();  // <-- ensure this is present
+                });
         }
 
         /// <summary>Per-tick forwarder so light-source rings (Glow, Iridium Band,

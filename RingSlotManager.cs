@@ -30,6 +30,78 @@ namespace MultiRingInfiniteForging
                     Game1.player.addItemToInventory(ring);
             }
         }
+        
+        /// <summary>Drains every extra ring slot back to the player, with overflow
+        /// dropped at the player's feet.  Safe to call multiple times; idempotent
+        /// when slots are already empty.  Use this before uninstalling the mod or
+        /// when reducing ExtraRingSlots to 0.</summary>
+        /// <returns>The number of rings returned to the player.</returns>
+        public static int DrainAllToPlayer()
+        {
+            int drained = 0;
+            for (int i = 0; i < Slots.Count; i++)
+            {
+                var ring = Slots[i];
+                if (ring == null) continue;
+
+                ring.onUnequip(Game1.player);
+                Slots[i] = null;
+                ReturnRingToPlayer(ring);
+                drained++;
+            }
+
+            if (drained > 0 && Game1.player != null)
+                Game1.player.buffs.Dirty = true;
+
+            return drained;
+        }
+        
+        /// <summary>Adds a ring to the player's inventory if there's room, otherwise
+        /// drops it as a Debris item at the player's feet in their current location.
+        /// Falls back to dropping at the farmhouse's bed tile if the player has no
+        /// current location (e.g. mid-save-transition).</summary>
+        private static void ReturnRingToPlayer(Ring ring)
+        {
+            if (ring == null) return;
+            var player = Game1.player;
+            if (player == null)
+            {
+                ModEntry.DiagVerbose($"ReturnRingToPlayer: no player; ring {ring.DisplayName} dropped (data orphaned)");
+                return;
+            }
+
+            // Try inventory first.
+            var leftover = player.addItemToInventory(ring);
+            if (leftover == null)
+            {
+                ModEntry.DiagVerbose($"ReturnRingToPlayer: {ring.DisplayName} -> inventory");
+                return;
+            }
+
+            // Inventory full: drop as Debris at the player's feet.
+            var location = player.currentLocation;
+            if (location != null)
+            {
+                Game1.createItemDebris(leftover, player.Position, -1, location);
+                Game1.addHUDMessage(new HUDMessage(
+                    $"{leftover.DisplayName} dropped on the ground (inventory full).",
+                    HUDMessage.error_type));
+                ModEntry.DiagVerbose($"ReturnRingToPlayer: {ring.DisplayName} -> ground at {player.Position}");
+                return;
+            }
+
+            // Final fallback: place in farmhouse bedside chest-equivalent spot.
+            // Use the farmhouse if accessible; otherwise log and orphan (very rare).
+            if (Game1.getLocationFromName("FarmHouse") is GameLocation farmhouse)
+            {
+                Game1.createItemDebris(leftover, new Microsoft.Xna.Framework.Vector2(8, 9) * Game1.tileSize, -1, farmhouse);
+                ModEntry.DiagVerbose($"ReturnRingToPlayer: {ring.DisplayName} -> dropped in farmhouse (no current location)");
+            }
+            else
+            {
+                ModEntry.DiagVerbose($"ReturnRingToPlayer: {ring.DisplayName} could not be placed (no location available)");
+            }
+        }
 
         // ---------- effects ----------
 

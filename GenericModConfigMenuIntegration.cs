@@ -1,5 +1,11 @@
 ﻿using System;
+using System.Collections.Generic;
+using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Graphics;
 using StardewModdingAPI;
+using StardewModdingAPI.Utilities;
+using StardewValley;
+using StardewValley.Menus;
 
 namespace MultiRingInfiniteForging
 {
@@ -8,8 +14,15 @@ namespace MultiRingInfiniteForging
     /// upstream IGenericModConfigMenuApi.cs. We declare it locally so we don't take
     /// a hard dependency on the GMCM assembly.
     /// </summary>
-    public interface IGenericModConfigMenuApi
+    /// <summary>The API which lets other mods add a config UI through Generic Mod Config Menu.</summary>
+    public interface IGenericModConfigMenuApi // Obsolete methods can be found in Framework/IGenericModConfigMenuApiWithObsoleteMethods
     {
+        /*********
+        ** Methods
+        *********/
+        /****
+        ** Must be called first
+        ****/
         /// <summary>Register a mod whose config can be edited through the UI.</summary>
         /// <param name="mod">The mod's manifest.</param>
         /// <param name="reset">Reset the mod's config to its default values.</param>
@@ -19,13 +32,18 @@ namespace MultiRingInfiniteForging
         void Register(IManifest mod, Action reset, Action save, bool titleScreenOnly = false);
 
         /****
-         ** Basic options
-         ****/
+        ** Basic options
+        ****/
         /// <summary>Add a section title at the current position in the form.</summary>
         /// <param name="mod">The mod's manifest.</param>
         /// <param name="text">The title text shown in the form.</param>
         /// <param name="tooltip">The tooltip text shown when the cursor hovers on the title, or <c>null</c> to disable the tooltip.</param>
-        void AddSectionTitle(IManifest mod, Func<string> text, Func<string>? tooltip = null);
+        void AddSectionTitle(IManifest mod, Func<string> text, Func<string> tooltip = null);
+
+        /// <summary>Add a paragraph of text at the current position in the form.</summary>
+        /// <param name="mod">The mod's manifest.</param>
+        /// <param name="text">The paragraph text to display.</param>
+        void AddParagraph(IManifest mod, Func<string> text);
 
         /// <summary>Add a boolean option at the current position in the form.</summary>
         /// <param name="mod">The mod's manifest.</param>
@@ -34,10 +52,9 @@ namespace MultiRingInfiniteForging
         /// <param name="name">The label text to show in the form.</param>
         /// <param name="tooltip">The tooltip text shown when the cursor hovers on the field, or <c>null</c> to disable the tooltip.</param>
         /// <param name="fieldId">The unique field ID for use with <see cref="OnFieldChanged"/>, or <c>null</c> to auto-generate a randomized ID.</param>
-        void AddBoolOption(IManifest mod, Func<bool> getValue, Action<bool> setValue,
-            Func<string> name, Func<string>? tooltip = null, string? fieldId = null);
+        void AddBoolOption(IManifest mod, Func<bool> getValue, Action<bool> setValue, Func<string> name, Func<string> tooltip = null, string fieldId = null);
 
-        /// <summary>Add a float option at the current position in the form.</summary>
+        /// <summary>Add an integer option at the current position in the form.</summary>
         /// <param name="mod">The mod's manifest.</param>
         /// <param name="getValue">Get the current value from the mod config.</param>
         /// <param name="setValue">Set a new value in the mod config.</param>
@@ -48,10 +65,17 @@ namespace MultiRingInfiniteForging
         /// <param name="interval">The interval of values that can be selected.</param>
         /// <param name="formatValue">Get the display text to show for a value, or <c>null</c> to show the number as-is.</param>
         /// <param name="fieldId">The unique field ID for use with <see cref="OnFieldChanged"/>, or <c>null</c> to auto-generate a randomized ID.</param>
-        void AddNumberOption(IManifest mod, Func<int> getValue, Action<int> setValue,
-            Func<string> name, Func<string>? tooltip = null,
-            int? min = null, int? max = null, int? interval = null,
-            Func<int, string>? formatValue = null, string? fieldId = null);
+        void AddNumberOption(IManifest mod, Func<int> getValue, Action<int> setValue, Func<string> name, Func<string> tooltip = null, int? min = null, int? max = null, int? interval = null, Func<int, string> formatValue = null, string fieldId = null);
+        
+        /****
+        ** Multi-page management
+        ****/
+        /// <summary>Add a link to a page added via <see cref="AddPage"/> at the current position in the form.</summary>
+        /// <param name="mod">The mod's manifest.</param>
+        /// <param name="pageId">The unique ID of the page to open when the link is clicked.</param>
+        /// <param name="text">The link text shown in the form.</param>
+        /// <param name="tooltip">The tooltip text shown when the cursor hovers on the link, or <c>null</c> to disable the tooltip.</param>
+        void AddPageLink(IManifest mod, string pageId, Func<string> text, Func<string> tooltip = null);
 
         /// <summary>Remove a mod from the config UI and delete all its options and pages.</summary>
         /// <param name="mod">The mod's manifest.</param>
@@ -143,6 +167,26 @@ namespace MultiRingInfiniteForging
                 name: () => ModEntry.T("config.verbose.logging.name"),
                 tooltip: () => ModEntry.T("config.verbose.logging.description")
             );
+            
+            // After your existing AddNumberOption / AddBoolOption calls:
+            api.AddSectionTitle(mod.ModManifest, () => "Uninstall safety");
+            
+            api.AddParagraph(mod.ModManifest, () =>
+                "Rings stored in extra slots live in this mod's save data.  Before you " +
+                "uninstall the mod, click the button below to return them all to your " +
+                "inventory (or drop them at your feet if it's full).");
+            
+            api.AddPageLink(mod.ModManifest, "", () => "", () => ""); // optional separator
+            
+            api.AddBoolOption(
+                mod: mod.ModManifest,
+                getValue: () => false,
+                setValue: v =>
+                {
+                    if (v) RingSlotManager.DrainAllToPlayer();
+                },
+                name: () => "Eject all extra rings now",
+                tooltip: () => "Toggling this returns every ring in your extra slots to your inventory.  Toggle and apply.");
         }
     }
 }
