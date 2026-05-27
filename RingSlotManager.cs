@@ -14,41 +14,79 @@ namespace MultiRingInfiniteForging
     {
         public static List<Ring?> Slots { get; private set; } = new();
 
+        /// <summary>Rings stored in slots beyond the current SlotCount.  Kept so
+        /// shrinking the slot count and then increasing it restores them rather
+        /// than discarding them.  Persisted alongside Slots in save data.</summary>
+        private static readonly List<Ring?> Overflow = new();
+
         private static readonly XmlSerializer RingSerializer = new(typeof(Ring));
 
         public static int SlotCount => ModEntry.Instance.Config.ExtraRingSlots;
 
         public static void EnsureSize()
         {
-            while (Slots.Count < SlotCount) Slots.Add(null);
+            // GROW: pull rings back from overflow first, then pad with nulls.
+            while (Slots.Count < SlotCount)
+            {
+                if (Overflow.Count > 0)
+                {
+                    var ring = Overflow[0];
+                    Overflow.RemoveAt(0);
+                    Slots.Add(ring);
+                    // Re-apply effects since this ring is once again "equipped".
+                    ring?.onEquip(Game1.player);
+                }
+                else
+                {
+                    Slots.Add(null);
+                }
+            }
+
+            // SHRINK: move trailing slots into overflow instead of discarding.
+            //   - Their effects are removed (they're no longer equipped).
+            //   - They stay in save data so we can restore them on grow / drain.
             while (Slots.Count > SlotCount)
             {
-                // Drop extras into the player's inventory if the user reduced slot count.
                 var ring = Slots[^1];
                 Slots.RemoveAt(Slots.Count - 1);
-                if (ring != null && Game1.player != null)
-                    Game1.player.addItemToInventory(ring);
+                if (ring != null)
+                {
+                    ring.onUnequip(Game1.player);
+                    Overflow.Add(ring);
+                }
             }
+
+            if (Game1.player != null)
+                Game1.player.buffs.Dirty = true;
         }
         
-        /// <summary>Drains every extra ring slot back to the player, with overflow
-        /// dropped at the player's feet.  Safe to call multiple times; idempotent
-        /// when slots are already empty.  Use this before uninstalling the mod or
-        /// when reducing ExtraRingSlots to 0.</summary>
-        /// <returns>The number of rings returned to the player.</returns>
+        /// <summary>Drains every extra ring slot AND the overflow bucket back to
+        /// the player, with overflow dropped at the player's feet.  Use this
+        /// before uninstalling the mod or when the user explicitly asks for all
+        /// rings back.</summary>
         public static int DrainAllToPlayer()
         {
             int drained = 0;
+
             for (int i = 0; i < Slots.Count; i++)
             {
                 var ring = Slots[i];
                 if (ring == null) continue;
-
                 ring.onUnequip(Game1.player);
                 Slots[i] = null;
                 ReturnRingToPlayer(ring);
                 drained++;
             }
+
+            // Drain the overflow bucket too — these are rings the user can't
+            // currently see in the UI but are still preserved in save data.
+            foreach (var ring in Overflow)
+            {
+                if (ring == null) continue;
+                ReturnRingToPlayer(ring);
+                drained++;
+            }
+            Overflow.Clear();
 
             if (drained > 0 && Game1.player != null)
                 Game1.player.buffs.Dirty = true;
@@ -202,21 +240,16 @@ namespace MultiRingInfiniteForging
         public static void Load(IModHelper helper)
         {
             Slots = new List<Ring?>();
+            Overflow.Clear();
             var data = helper.Data.ReadSaveData<ExtraRingsData>(ModEntry.SaveKey) ?? new ExtraRingsData();
 
             foreach (var xml in data.Slots)
+                Slots.Add(DeserializeRing(xml));
+
+            foreach (var xml in data.Overflow)
             {
-                if (string.IsNullOrEmpty(xml)) { Slots.Add(null); continue; }
-                try
-                {
-                    using var sr = new StringReader(xml);
-                    var ring = (Ring?)RingSerializer.Deserialize(sr);
-                    Slots.Add(ring);
-                }
-                catch
-                {
-                    Slots.Add(null);
-                }
+                var ring = DeserializeRing(xml);
+                if (ring != null) Overflow.Add(ring);
             }
 
             EnsureSize();
@@ -226,13 +259,34 @@ namespace MultiRingInfiniteForging
         {
             var data = new ExtraRingsData();
             foreach (var ring in Slots)
-            {
-                if (ring == null) { data.Slots.Add(null); continue; }
-                using var sw = new StringWriter();
-                RingSerializer.Serialize(sw, ring);
-                data.Slots.Add(sw.ToString());
-            }
+                data.Slots.Add(SerializeRing(ring));
+
+            foreach (var ring in Overflow)
+                data.Overflow.Add(SerializeRing(ring));
+
             helper.Data.WriteSaveData(ModEntry.SaveKey, data);
+        }
+
+        private static Ring? DeserializeRing(string? xml)
+        {
+            if (string.IsNullOrEmpty(xml)) return null;
+            try
+            {
+                using var sr = new StringReader(xml);
+                return (Ring?)RingSerializer.Deserialize(sr);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static string? SerializeRing(Ring? ring)
+        {
+            if (ring == null) return null;
+            using var sw = new StringWriter();
+            RingSerializer.Serialize(sw, ring);
+            return sw.ToString();
         }
     }
 }

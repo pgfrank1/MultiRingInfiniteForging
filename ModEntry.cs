@@ -45,19 +45,19 @@ namespace MultiRingInfiniteForging
             HasEnchantableScythes = helper.ModRegistry.IsLoaded("Goldenrevolver.EnchantableScythes");
             HasScytheToolEnchantments = helper.ModRegistry.IsLoaded("mushymato.ScytheToolEnchantments");
             
-            if (HasEnchantableScythes && HasScytheToolEnchantments)
+            switch (HasEnchantableScythes, HasScytheToolEnchantments)
             {
-                Monitor.Log(
-                    "Both Enchantable Scythes and Scythe Tool Enchantments are installed — this may cause conflicts!",
-                    LogLevel.Error);
-            }
-            else if (HasEnchantableScythes)
-            {
-                Monitor.Log("Enchantable Scythes mod found, enabling scythe enchantment support", LogLevel.Info);
-            }
-            else if (HasScytheToolEnchantments)
-            {
-                Monitor.Log("Scythe Tool Enchantments mod found, enabling scythe enchantment support", LogLevel.Info);
+                case (true, true):
+                    Monitor.Log(
+                        "Both Enchantable Scythes and Scythe Tool Enchantments are installed — this may cause conflicts!",
+                        LogLevel.Error);
+                    break;
+                case (true, false):
+                    Monitor.Log("Enchantable Scythes mod found, enabling scythe enchantment support", LogLevel.Info);
+                    break;
+                case (false, true):
+                    Monitor.Log("Scythe Tool Enchantments mod found, enabling scythe enchantment support", LogLevel.Info);
+                    break;
             }
 
             helper.Events.GameLoop.GameLaunched += OnGameLaunched;
@@ -100,6 +100,21 @@ namespace MultiRingInfiniteForging
 
             var p = Game1.player;
             var b = p.buffs;
+            var loc = p.currentLocation;
+            // --- Light sources in current location (for Glow/Iridium Band/Glowstone) ---
+            int sharedLights = 0;
+            try
+            {
+                // sharedLights is a NetIntDictionary<LightSource, NetRef<LightSource>>.
+                // Iterate .Values rather than relying on a Count property (netcode
+                // collections expose enumeration but property surfaces vary by version).
+                if (loc?.sharedLights != null)
+                {
+                    foreach (var _ in loc.sharedLights.Values)
+                        sharedLights++;
+                }
+            }
+            catch { /* ignore — diagnostics must never throw */ }
 
             int extra = 0;
             foreach (var r in RingSlotManager.Slots)
