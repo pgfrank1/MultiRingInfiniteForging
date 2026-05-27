@@ -1,0 +1,21 @@
+{
+  "panel.label": "追加リングスロット",
+  "panel.hover.show": "追加リングスロットを表示",
+  "panel.hover.hide": "追加リングスロットを非表示",
+  "panel.slot.empty": "空の追加リングスロット",
+  "config.section.title.ring": "リングスロット",
+  "config.section.title.forge": "鍛冶",
+  "config.section.title.verbose.logging": "詳細ログ",
+  "config.extraRingSlots.name": "追加リングスロット",
+  "config.extraRingSlots.description": "追加するリングスロットの数（標準の2スロットに加えて）。",
+  "config.infiniteCombining.name": "無限リング合成",
+  "config.infiniteCombining.description": "合成できるリングの数の上限を解除します。",
+  "config.infiniteWeaponForging.name": "無限武器鍛冶",
+  "config.infiniteWeaponForging.description": "武器鍛冶における3宝石の上限を解除します（レベル3を超えても宝石を付与し続けられます）。",
+  "config.RemoveDiamondForgesCap.name": "ダイヤモンド鍛冶上限を解除",
+  "config.RemoveDiamondForgesCap.description": "使用できるダイヤモンド鍛冶の数の上限を解除します（レベル3を超えて使い続けられます）。",
+  "config.multipleEnchantments.name": "複数エンチャント",
+  "config.multipleEnchantments.description": "既存のエンチャントを上書きする代わりに、同じ武器やツールに複数のエンチャントを重ねがけできるようにします。",
+  "config.verbose.logging.name": "詳細ログ",
+  "config.verbose.logging.description": "コンソールに多数のデバッグメッセージを送信します。"
+}

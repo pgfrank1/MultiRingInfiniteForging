@@ -1,0 +1,21 @@
+{
+  "panel.label": "额外戒指槽",
+  "panel.hover.show": "显示额外戒指槽",
+  "panel.hover.hide": "隐藏额外戒指槽",
+  "panel.slot.empty": "空的额外戒指槽",
+  "config.section.title.ring": "戒指槽",
+  "config.section.title.forge": "锻造",
+  "config.section.title.verbose.logging": "详细日志",
+  "config.extraRingSlots.name": "额外戒指槽",
+  "config.extraRingSlots.description": "要添加的额外戒指槽数量（除原有的2个槽位之外）。",
+  "config.infiniteCombining.name": "无限合并戒指",
+  "config.infiniteCombining.description": "移除戒指合并数量的上限。",
+  "config.infiniteWeaponForging.name": "无限武器锻造",
+  "config.infiniteWeaponForging.description": "移除武器锻造的3颗宝石上限（允许在3级以上继续镶嵌宝石）。",
+  "config.RemoveDiamondForgesCap.name": "移除钻石锻造上限",
+  "config.RemoveDiamondForgesCap.description": "移除可使用的钻石锻造次数上限（允许在3级以上继续使用）。",
+  "config.multipleEnchantments.name": "多重附魔",
+  "config.multipleEnchantments.description": "允许在同一武器或工具上叠加多个附魔，而不是替换现有附魔。",
+  "config.verbose.logging.name": "详细日志",
+  "config.verbose.logging.description": "向控制台发送大量调试消息。"
+}

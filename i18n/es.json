@@ -1,0 +1,21 @@
+{
+  "panel.label": "Ranuras de anillo adicionales",
+  "panel.hover.show": "Mostrar ranuras de anillo adicionales",
+  "panel.hover.hide": "Ocultar ranuras de anillo adicionales",
+  "panel.slot.empty": "Ranura de anillo adicional vacía",
+  "config.section.title.ring": "Ranuras de anillo",
+  "config.section.title.forge": "Forja",
+  "config.section.title.verbose.logging": "Registro detallado",
+  "config.extraRingSlots.name": "Ranuras de anillo adicionales",
+  "config.extraRingSlots.description": "Cuántas ranuras de anillo adicionales agregar (además de las 2 ranuras estándar).",
+  "config.infiniteCombining.name": "Combinación infinita de anillos",
+  "config.infiniteCombining.description": "Elimina el límite en la cantidad de anillos que se pueden combinar.",
+  "config.infiniteWeaponForging.name": "Forja de armas infinita",
+  "config.infiniteWeaponForging.description": "Elimina el límite de 3 gemas en la forja de armas (permite seguir aplicando gemas más allá del nivel 3).",
+  "config.RemoveDiamondForgesCap.name": "Eliminar límite de forjas de diamante",
+  "config.RemoveDiamondForgesCap.description": "Elimina el límite en la cantidad de forjas de diamante utilizables (permite usarlas más allá del nivel 3).",
+  "config.multipleEnchantments.name": "Encantamientos múltiples",
+  "config.multipleEnchantments.description": "Permite apilar múltiples encantamientos en la misma arma o herramienta en lugar de reemplazar el existente.",
+  "config.verbose.logging.name": "Registro detallado",
+  "config.verbose.logging.description": "Envía muchos mensajes de depuración a la consola."
+}

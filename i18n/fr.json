@@ -1,0 +1,21 @@
+{
+  "panel.label": "Emplacements d'anneau supplémentaires",
+  "panel.hover.show": "Afficher les emplacements d'anneau supplémentaires",
+  "panel.hover.hide": "Masquer les emplacements d'anneau supplémentaires",
+  "panel.slot.empty": "Emplacement d'anneau supplémentaire vide",
+  "config.section.title.ring": "Emplacements d'anneau",
+  "config.section.title.forge": "Forge",
+  "config.section.title.verbose.logging": "Journalisation détaillée",
+  "config.extraRingSlots.name": "Emplacements d'anneau supplémentaires",
+  "config.extraRingSlots.description": "Combien d'emplacements d'anneau supplémentaires ajouter (en plus des 2 emplacements de base).",
+  "config.infiniteCombining.name": "Combinaison infinie d'anneaux",
+  "config.infiniteCombining.description": "Supprime la limite du nombre d'anneaux pouvant être combinés.",
+  "config.infiniteWeaponForging.name": "Forge d'armes infinie",
+  "config.infiniteWeaponForging.description": "Supprime la limite de 3 gemmes pour la forge d'armes (permet de continuer à appliquer des gemmes au-delà du niveau 3).",
+  "config.RemoveDiamondForgesCap.name": "Supprimer la limite des forges de diamant",
+  "config.RemoveDiamondForgesCap.description": "Supprime la limite du nombre de forges de diamant utilisables (permet de continuer au-delà du niveau 3).",
+  "config.multipleEnchantments.name": "Enchantements multiples",
+  "config.multipleEnchantments.description": "Permet d'empiler plusieurs enchantements sur la même arme ou le même outil au lieu de remplacer l'enchantement existant.",
+  "config.verbose.logging.name": "Journalisation détaillée",
+  "config.verbose.logging.description": "Envoie de nombreux messages de débogage à la console."
+}

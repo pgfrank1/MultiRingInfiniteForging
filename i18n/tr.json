@@ -1,0 +1,21 @@
+{
+  "panel.label": "Ekstra yüzük yuvaları",
+  "panel.hover.show": "Ekstra yüzük yuvalarını göster",
+  "panel.hover.hide": "Ekstra yüzük yuvalarını gizle",
+  "panel.slot.empty": "Boş ekstra yüzük yuvası",
+  "config.section.title.ring": "Yüzük yuvaları",
+  "config.section.title.forge": "Dövme ocağı",
+  "config.section.title.verbose.logging": "Ayrıntılı günlük kaydı",
+  "config.extraRingSlots.name": "Ekstra yüzük yuvaları",
+  "config.extraRingSlots.description": "Eklenecek ekstra yüzük yuvası sayısı (2 standart yuvanın yanı sıra).",
+  "config.infiniteCombining.name": "Sonsuz yüzük birleştirme",
+  "config.infiniteCombining.description": "Birleştirilebilecek yüzük sayısı sınırını kaldırır.",
+  "config.infiniteWeaponForging.name": "Sonsuz silah dövme",
+  "config.infiniteWeaponForging.description": "Silah dövmedeki 3 mücevher sınırını kaldırır (seviye 3'ün ötesinde mücevher eklemeye devam etmenizi sağlar).",
+  "config.RemoveDiamondForgesCap.name": "Elmas dövme sınırını kaldır",
+  "config.RemoveDiamondForgesCap.description": "Kullanılabilecek elmas dövme sayısı sınırını kaldırır (seviye 3'ün ötesinde kullanmaya devam etmenizi sağlar).",
+  "config.multipleEnchantments.name": "Çoklu büyüler",
+  "config.multipleEnchantments.description": "Mevcut büyüyü değiştirmek yerine aynı silah veya araca birden fazla büyü eklemenizi sağlar.",
+  "config.verbose.logging.name": "Ayrıntılı günlük kaydı",
+  "config.verbose.logging.description": "Konsola çok sayıda hata ayıklama mesajı gönderir."
+}

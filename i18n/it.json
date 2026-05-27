@@ -1,0 +1,21 @@
+{
+  "panel.label": "Slot anello extra",
+  "panel.hover.show": "Mostra slot anello extra",
+  "panel.hover.hide": "Nascondi slot anello extra",
+  "panel.slot.empty": "Slot anello extra vuoto",
+  "config.section.title.ring": "Slot anello",
+  "config.section.title.forge": "Fucina",
+  "config.section.title.verbose.logging": "Registrazione dettagliata",
+  "config.extraRingSlots.name": "Slot anello extra",
+  "config.extraRingSlots.description": "Quanti slot anello extra aggiungere (in aggiunta ai 2 slot standard).",
+  "config.infiniteCombining.name": "Combinazione anelli infinita",
+  "config.infiniteCombining.description": "Rimuove il limite al numero di anelli combinabili.",
+  "config.infiniteWeaponForging.name": "Forgiatura armi infinita",
+  "config.infiniteWeaponForging.description": "Rimuove il limite di 3 gemme nella forgiatura delle armi (consente di applicare gemme oltre il livello 3).",
+  "config.RemoveDiamondForgesCap.name": "Rimuovi limite forgiatura diamanti",
+  "config.RemoveDiamondForgesCap.description": "Rimuove il limite al numero di forgiature con diamanti (consente di usarle oltre il livello 3).",
+  "config.multipleEnchantments.name": "Incantesimi multipli",
+  "config.multipleEnchantments.description": "Consente di sovrapporre più incantesimi sulla stessa arma o strumento invece di sostituire quello esistente.",
+  "config.verbose.logging.name": "Registrazione dettagliata",
+  "config.verbose.logging.description": "Invia molti messaggi di debug alla console."
+}

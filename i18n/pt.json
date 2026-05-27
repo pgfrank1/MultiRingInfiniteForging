@@ -1,0 +1,21 @@
+{
+  "panel.label": "Slots de anel extras",
+  "panel.hover.show": "Mostrar slots de anel extras",
+  "panel.hover.hide": "Ocultar slots de anel extras",
+  "panel.slot.empty": "Slot de anel extra vazio",
+  "config.section.title.ring": "Slots de anel",
+  "config.section.title.forge": "Forja",
+  "config.section.title.verbose.logging": "Registro detalhado",
+  "config.extraRingSlots.name": "Slots de anel extras",
+  "config.extraRingSlots.description": "Quantos slots de anel extras adicionar (além dos 2 slots padrão).",
+  "config.infiniteCombining.name": "Combinação infinita de anéis",
+  "config.infiniteCombining.description": "Remove o limite de quantos anéis podem ser combinados.",
+  "config.infiniteWeaponForging.name": "Forja de armas infinita",
+  "config.infiniteWeaponForging.description": "Remove o limite de 3 gemas na forja de armas (permite continuar aplicando gemas além do nível 3).",
+  "config.RemoveDiamondForgesCap.name": "Remover limite de forjas de diamante",
+  "config.RemoveDiamondForgesCap.description": "Remove o limite de forjas de diamante utilizáveis (permite continuar além do nível 3).",
+  "config.multipleEnchantments.name": "Múltiplos encantamentos",
+  "config.multipleEnchantments.description": "Permite empilhar múltiplos encantamentos na mesma arma ou ferramenta em vez de substituir o encantamento existente.",
+  "config.verbose.logging.name": "Registro detalhado",
+  "config.verbose.logging.description": "Envia muitas mensagens de depuração para o console."
+}

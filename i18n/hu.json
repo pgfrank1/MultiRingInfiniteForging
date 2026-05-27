@@ -1,0 +1,21 @@
+{
+  "panel.label": "Extra gyűrűhelyek",
+  "panel.hover.show": "Extra gyűrűhelyek megjelenítése",
+  "panel.hover.hide": "Extra gyűrűhelyek elrejtése",
+  "panel.slot.empty": "Üres extra gyűrűhely",
+  "config.section.title.ring": "Gyűrűhelyek",
+  "config.section.title.forge": "Kovácsműhely",
+  "config.section.title.verbose.logging": "Részletes naplózás",
+  "config.extraRingSlots.name": "Extra gyűrűhelyek",
+  "config.extraRingSlots.description": "Hány extra gyűrűhelyet adjon hozzá (a 2 alap helyen felül).",
+  "config.infiniteCombining.name": "Végtelen gyűrűkombinálás",
+  "config.infiniteCombining.description": "Eltávolítja a kombinálható gyűrűk számának korlátját.",
+  "config.infiniteWeaponForging.name": "Végtelen fegyverkovácsolás",
+  "config.infiniteWeaponForging.description": "Eltávolítja a 3 drágakő korlátot a fegyverkovácsolásnál (lehetővé teszi drágakövek alkalmazását a 3. szint felett is).",
+  "config.RemoveDiamondForgesCap.name": "Gyémántkovácsolás korlátjának eltávolítása",
+  "config.RemoveDiamondForgesCap.description": "Eltávolítja a felhasználható gyémántkovácsolások számának korlátját (lehetővé teszi a 3. szint feletti használatot).",
+  "config.multipleEnchantments.name": "Többszörös varázslatok",
+  "config.multipleEnchantments.description": "Lehetővé teszi több varázslat halmozását ugyanazon a fegyveren vagy eszközön a meglévő csere helyett.",
+  "config.verbose.logging.name": "Részletes naplózás",
+  "config.verbose.logging.description": "Sok hibakeresési üzenetet küld a konzolra."
+}

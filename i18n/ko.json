@@ -1,0 +1,21 @@
+{
+  "panel.label": "추가 반지 슬롯",
+  "panel.hover.show": "추가 반지 슬롯 표시",
+  "panel.hover.hide": "추가 반지 슬롯 숨기기",
+  "panel.slot.empty": "비어 있는 추가 반지 슬롯",
+  "config.section.title.ring": "반지 슬롯",
+  "config.section.title.forge": "대장간",
+  "config.section.title.verbose.logging": "자세한 로깅",
+  "config.extraRingSlots.name": "추가 반지 슬롯",
+  "config.extraRingSlots.description": "추가할 반지 슬롯 수 (기본 2개 슬롯 외에 추가).",
+  "config.infiniteCombining.name": "무한 반지 조합",
+  "config.infiniteCombining.description": "조합할 수 있는 반지 수의 제한을 제거합니다.",
+  "config.infiniteWeaponForging.name": "무한 무기 제련",
+  "config.infiniteWeaponForging.description": "무기 제련 시 보석 3개 제한을 제거합니다 (레벨 3 이후에도 보석을 계속 적용할 수 있습니다).",
+  "config.RemoveDiamondForgesCap.name": "다이아몬드 제련 제한 제거",
+  "config.RemoveDiamondForgesCap.description": "사용할 수 있는 다이아몬드 제련 횟수 제한을 제거합니다 (레벨 3 이후에도 계속 사용할 수 있습니다).",
+  "config.multipleEnchantments.name": "다중 인챈트",
+  "config.multipleEnchantments.description": "기존 인챈트를 교체하는 대신 같은 무기나 도구에 여러 인챈트를 중첩할 수 있습니다.",
+  "config.verbose.logging.name": "자세한 로깅",
+  "config.verbose.logging.description": "콘솔에 많은 디버그 메시지를 전송합니다."
+}

@@ -1,0 +1,21 @@
+{
+  "panel.label": "Дополнительные слоты для колец",
+  "panel.hover.show": "Показать дополнительные слоты для колец",
+  "panel.hover.hide": "Скрыть дополнительные слоты для колец",
+  "panel.slot.empty": "Пустой дополнительный слот для кольца",
+  "config.section.title.ring": "Слоты для колец",
+  "config.section.title.forge": "Кузница",
+  "config.section.title.verbose.logging": "Подробное ведение журнала",
+  "config.extraRingSlots.name": "Дополнительные слоты для колец",
+  "config.extraRingSlots.description": "Сколько дополнительных слотов для колец добавить (помимо 2 стандартных).",
+  "config.infiniteCombining.name": "Бесконечное объединение колец",
+  "config.infiniteCombining.description": "Убирает ограничение на количество объединяемых колец.",
+  "config.infiniteWeaponForging.name": "Бесконечная ковка оружия",
+  "config.infiniteWeaponForging.description": "Убирает ограничение в 3 камня при ковке оружия (позволяет вставлять камни сверх 3-го уровня).",
+  "config.RemoveDiamondForgesCap.name": "Убрать ограничение алмазной ковки",
+  "config.RemoveDiamondForgesCap.description": "Убирает ограничение на количество алмазных ковок (позволяет использовать их сверх 3-го уровня).",
+  "config.multipleEnchantments.name": "Множественные чары",
+  "config.multipleEnchantments.description": "Позволяет накладывать несколько чар на одно оружие или инструмент вместо замены существующих.",
+  "config.verbose.logging.name": "Подробное ведение журнала",
+  "config.verbose.logging.description": "Отправляет множество отладочных сообщений в консоль."
+}
