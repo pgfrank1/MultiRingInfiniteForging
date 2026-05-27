@@ -13,6 +13,8 @@
   "config.infiniteCombining.description": "Remove the cap on how many rings can be combined together.",
   "config.infiniteWeaponForging.name": "Infinite Weapon Forging",
   "config.infiniteWeaponForging.description": "Remove the 3-gem cap on weapon forging (lets you keep applying gems to a weapon beyond level 3).",
+  "config.RemoveDiamondForgesCap.name": "Remove Diamond Forges Cap",
+  "config.RemoveDiamondForgesCap.description": "Remove the cap on how many diamond forges can be used (lets you keep using diamond forges beyond level 3).",
   "config.multipleEnchantments.name": "Multiple Enchantments",
   "config.multipleEnchantments.description": "Allow stacking multiple enchantments on the same weapon or tool instead of replacing the existing enchantment.",
   "config.verbose.logging.name": "Verbose Logging",

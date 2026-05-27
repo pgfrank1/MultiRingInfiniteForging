@@ -11,6 +11,8 @@
         /// <summary>Remove the 3-gem cap on weapon forging (lets you keep applying gems
         /// to a weapon beyond level 3).</summary>
         public bool InfiniteWeaponForging { get; set; } = true;
+        
+        public bool RemoveDiamondForgesCap { get; set; } = false;
 
         /// <summary>Allow stacking multiple enchantments on the same weapon or tool
         /// instead of replacing the existing enchantment.</summary>

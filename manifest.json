@@ -6,7 +6,7 @@
   "UniqueID": "ringlord174.MultiRingInfiniteForging",
   "EntryDll": "MultiRingInfiniteForging.dll",
   "MinimumApiVersion": "4.0.0",
-  "UpdateKeys": [],
+  "UpdateKeys": [ "Nexus:46798" ],
   "Dependencies": [
     {
       "UniqueID": "spacechase0.GenericModConfigMenu",

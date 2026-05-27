@@ -357,7 +357,7 @@ namespace MultiRingInfiniteForging
                 if (i == null) return;
 
                 // Scythes can't be forged or enchanted — always dim them.
-                if (i is MeleeWeapon scytheCheck && scytheCheck.isScythe())
+                if (i is MeleeWeapon scytheCheck && scytheCheck.isScythe() && !ModEntry.HasEnchantableScythes && !ModEntry.HasScytheToolEnchantments)
                 {
                     __result = false;
                     return;
@@ -576,9 +576,15 @@ namespace MultiRingInfiniteForging
             if (!__instance.hasEnchantmentOfType<StardewValley.Enchantments.TopazEnchantment>())      validForges.Add(4);
             if (!__instance.hasEnchantmentOfType<StardewValley.Enchantments.JadeEnchantment>())       validForges.Add(5);
 
+            if (validForges.Count == 0 && ModEntry.Instance.Config.RemoveDiamondForgesCap)
+            {
+                validForges = new List<int> { 0, 1, 2, 3, 4, 5 };
+            }
+            
             // Vanilla applies up to 3 gem enchantments per Diamond (the original
             // "MAX_FORGES" constant before our patch).
             const int diamondCapPerCraft = 3;
+            
             int forgesLeft = System.Math.Min(diamondCapPerCraft, validForges.Count);
 
             for (int i = 0; i < forgesLeft; i++)

@@ -714,7 +714,7 @@ namespace MultiRingInfiniteForging
 
                     // Determine if vanilla would allow this item in the left slot.
                     bool acceptsInLeft =
-                        (carriedAny is StardewValley.Tools.MeleeWeapon mw && !mw.isScythe())
+                        (carriedAny is StardewValley.Tools.MeleeWeapon mw && (!mw.isScythe() || ModEntry.HasEnchantableScythes || ModEntry.HasScytheToolEnchantments))
                         || carriedAny is StardewValley.Tools.Slingshot
                         || (carriedAny is Tool t && t.UpgradeLevel > 0 && t is not StardewValley.Tools.MeleeWeapon)
                         || carriedAny is Ring;
@@ -1070,7 +1070,7 @@ namespace MultiRingInfiniteForging
         {
             if (item == null) return false;
             if (item is Ring) return true;
-            if (item is StardewValley.Tools.MeleeWeapon weapon) return !weapon.isScythe();
+            if (item is StardewValley.Tools.MeleeWeapon weapon) return !weapon.isScythe() || ModEntry.HasEnchantableScythes || ModEntry.HasScytheToolEnchantments;
             if (item is StardewValley.Tools.Slingshot) return true;
             if (item is Tool) return true;
 
@@ -1100,8 +1100,8 @@ namespace MultiRingInfiniteForging
             if (leftTool is StardewValley.Tools.MeleeWeapon leftWeapon
                 && rightItem is StardewValley.Tools.MeleeWeapon rightWeapon
                 && rightWeapon.type.Value == leftWeapon.type.Value
-                && !leftWeapon.isScythe()
-                && !rightWeapon.isScythe())
+                && (!leftWeapon.isScythe() || ModEntry.HasEnchantableScythes || ModEntry.HasScytheToolEnchantments)
+                && (!rightWeapon.isScythe() || ModEntry.HasEnchantableScythes || ModEntry.HasScytheToolEnchantments))
             {
                 return true;
             }
@@ -1133,7 +1133,7 @@ namespace MultiRingInfiniteForging
             if (rightItem.QualifiedItemId == "(O)852")
             {
                 if (leftTool is not StardewValley.Tools.MeleeWeapon weapon) return false;
-                if (weapon.isScythe()) return false;
+                if (weapon.isScythe() || !ModEntry.HasEnchantableScythes || !ModEntry.HasScytheToolEnchantments) return false;
                 return true;
 
                 // Vanilla rule: pre-Galaxy weapon below level 15 — straightforward.
@@ -1159,14 +1159,14 @@ namespace MultiRingInfiniteForging
             {
                 if (leftTool is not StardewValley.Tools.MeleeWeapon scytheCheck)
                     return false;
-                if (scytheCheck.isScythe())
+                if (scytheCheck.isScythe() && !ModEntry.HasEnchantableScythes && !ModEntry.HasScytheToolEnchantments)
                     return false;
                 
                 // Respect the forge-level cap: when InfiniteWeaponForging is off,
                 // vanilla caps total forges at GetMaxForges() (default 3).  A Diamond
                 // craft at the cap is a no-op (consumes the diamond + shards, adds
                 // nothing).  Refuse.
-                if (leftTool.GetTotalForgeLevels() >= leftTool.GetMaxForges())
+                if (leftTool.GetTotalForgeLevels() >= leftTool.GetMaxForges() && !ModEntry.Instance.Config.RemoveDiamondForgesCap)
                     return false;
 
                 bool anyMissing =
@@ -1175,7 +1175,8 @@ namespace MultiRingInfiniteForging
                     || !leftTool.hasEnchantmentOfType<StardewValley.Enchantments.RubyEnchantment>()
                     || !leftTool.hasEnchantmentOfType<StardewValley.Enchantments.AmethystEnchantment>()
                     || !leftTool.hasEnchantmentOfType<StardewValley.Enchantments.TopazEnchantment>()
-                    || !leftTool.hasEnchantmentOfType<StardewValley.Enchantments.JadeEnchantment>();
+                    || !leftTool.hasEnchantmentOfType<StardewValley.Enchantments.JadeEnchantment>()
+                    || ModEntry.Instance.Config.RemoveDiamondForgesCap;
                 return anyMissing;
             }
 
@@ -1183,7 +1184,7 @@ namespace MultiRingInfiniteForging
             // reasoning as Diamond — these are weapon-stat enchantments.
             if (leftTool is not StardewValley.Tools.MeleeWeapon meleeForGem)
                 return false;
-            if (meleeForGem.isScythe())
+            if (meleeForGem.isScythe() && !ModEntry.HasEnchantableScythes && !ModEntry.HasScytheToolEnchantments)
                 return false;
 
             var enchantment = StardewValley.Enchantments.BaseEnchantment

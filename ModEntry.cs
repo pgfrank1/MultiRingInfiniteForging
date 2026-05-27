@@ -11,6 +11,10 @@ namespace MultiRingInfiniteForging
         public static ModEntry Instance = null!;
         public ModConfig Config = null!;
         
+        // Mod Compatability
+        public static bool HasEnchantableScythes { get; private set;}
+        public static bool HasScytheToolEnchantments { get; private set;}
+        
         /// <summary>Convenience: shorthand for translating a key.</summary>
         public static string T(string key) => Instance.Helper.Translation.Get(key);
         
@@ -36,6 +40,25 @@ namespace MultiRingInfiniteForging
         {
             Instance = this;
             Config = helper.ReadConfig<ModConfig>();
+            
+            // Mod Compatability
+            HasEnchantableScythes = helper.ModRegistry.IsLoaded("Goldenrevolver.EnchantableScythes");
+            HasScytheToolEnchantments = helper.ModRegistry.IsLoaded("mushymato.ScytheToolEnchantments");
+            
+            if (HasEnchantableScythes && HasScytheToolEnchantments)
+            {
+                Monitor.Log(
+                    "Both Enchantable Scythes and Scythe Tool Enchantments are installed — this may cause conflicts!",
+                    LogLevel.Error);
+            }
+            else if (HasEnchantableScythes)
+            {
+                Monitor.Log("Enchantable Scythes mod found, enabling scythe enchantment support", LogLevel.Info);
+            }
+            else if (HasScytheToolEnchantments)
+            {
+                Monitor.Log("Scythe Tool Enchantments mod found, enabling scythe enchantment support", LogLevel.Info);
+            }
 
             helper.Events.GameLoop.GameLaunched += OnGameLaunched;
             helper.Events.GameLoop.SaveLoaded += OnSaveLoaded;
