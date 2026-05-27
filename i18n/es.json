@@ -6,6 +6,7 @@
   "config.section.title.ring": "Ranuras de anillo",
   "config.section.title.forge": "Forja",
   "config.section.title.verbose.logging": "Registro detallado",
+  "config.section.title.uninstall": "Seguridad al desinstalar",
   "config.extraRingSlots.name": "Ranuras de anillo adicionales",
   "config.extraRingSlots.description": "Cuántas ranuras de anillo adicionales agregar (además de las 2 ranuras estándar).",
   "config.infiniteCombining.name": "Combinación infinita de anillos",
@@ -17,5 +18,8 @@
   "config.multipleEnchantments.name": "Encantamientos múltiples",
   "config.multipleEnchantments.description": "Permite apilar múltiples encantamientos en la misma arma o herramienta en lugar de reemplazar el existente.",
   "config.verbose.logging.name": "Registro detallado",
-  "config.verbose.logging.description": "Envía muchos mensajes de depuración a la consola."
+  "config.verbose.logging.description": "Envía muchos mensajes de depuración a la consola.",
+  "config.uninstall.safety.paragraph": "Los anillos guardados en ranuras adicionales viven en los datos de guardado de este mod. Antes de desinstalar el mod, haz clic en el botón de abajo para devolverlos todos a tu inventario (o dejarlos a tus pies si está lleno).",
+  "config.uninstall.safety.button": "Expulsar todos los anillos extra ahora",
+  "config.uninstall.safety.button.tooltip": "Activar esto devuelve todos los anillos de tus ranuras adicionales a tu inventario. Activa y aplica."
 }

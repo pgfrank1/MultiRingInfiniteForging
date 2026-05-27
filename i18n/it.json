@@ -6,6 +6,7 @@
   "config.section.title.ring": "Slot anello",
   "config.section.title.forge": "Fucina",
   "config.section.title.verbose.logging": "Registrazione dettagliata",
+  "config.section.title.uninstall": "Sicurezza disinstallazione",
   "config.extraRingSlots.name": "Slot anello extra",
   "config.extraRingSlots.description": "Quanti slot anello extra aggiungere (in aggiunta ai 2 slot standard).",
   "config.infiniteCombining.name": "Combinazione anelli infinita",
@@ -17,5 +18,8 @@
   "config.multipleEnchantments.name": "Incantesimi multipli",
   "config.multipleEnchantments.description": "Consente di sovrapporre più incantesimi sulla stessa arma o strumento invece di sostituire quello esistente.",
   "config.verbose.logging.name": "Registrazione dettagliata",
-  "config.verbose.logging.description": "Invia molti messaggi di debug alla console."
+  "config.verbose.logging.description": "Invia molti messaggi di debug alla console.",
+  "config.uninstall.safety.paragraph": "Gli anelli conservati negli slot extra vivono nei dati di salvataggio di questa mod. Prima di disinstallarla, clicca il pulsante qui sotto per restituirli tutti al tuo inventario (o farli cadere ai tuoi piedi se è pieno).",
+  "config.uninstall.safety.button": "Espelli tutti gli anelli extra ora",
+  "config.uninstall.safety.button.tooltip": "Attivando questa opzione tutti gli anelli negli slot extra vengono restituiti al tuo inventario. Attiva e applica."
 }

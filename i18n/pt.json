@@ -6,6 +6,7 @@
   "config.section.title.ring": "Slots de anel",
   "config.section.title.forge": "Forja",
   "config.section.title.verbose.logging": "Registro detalhado",
+  "config.section.title.uninstall": "Segurança de desinstalação",
   "config.extraRingSlots.name": "Slots de anel extras",
   "config.extraRingSlots.description": "Quantos slots de anel extras adicionar (além dos 2 slots padrão).",
   "config.infiniteCombining.name": "Combinação infinita de anéis",
@@ -17,5 +18,8 @@
   "config.multipleEnchantments.name": "Múltiplos encantamentos",
   "config.multipleEnchantments.description": "Permite empilhar múltiplos encantamentos na mesma arma ou ferramenta em vez de substituir o encantamento existente.",
   "config.verbose.logging.name": "Registro detalhado",
-  "config.verbose.logging.description": "Envia muitas mensagens de depuração para o console."
+  "config.verbose.logging.description": "Envia muitas mensagens de depuração para o console.",
+  "config.uninstall.safety.paragraph": "Os anéis armazenados em slots extras vivem nos dados de salvamento deste mod. Antes de desinstalar o mod, clique no botão abaixo para devolvê-los ao seu inventário (ou soltá-los aos seus pés se estiver cheio).",
+  "config.uninstall.safety.button": "Ejetar todos os anéis extras agora",
+  "config.uninstall.safety.button.tooltip": "Alternar isso devolve todos os anéis dos seus slots extras ao seu inventário. Alterne e aplique."
 }

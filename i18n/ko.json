@@ -6,6 +6,7 @@
   "config.section.title.ring": "반지 슬롯",
   "config.section.title.forge": "대장간",
   "config.section.title.verbose.logging": "자세한 로깅",
+  "config.section.title.uninstall": "제거 안전 기능",
   "config.extraRingSlots.name": "추가 반지 슬롯",
   "config.extraRingSlots.description": "추가할 반지 슬롯 수 (기본 2개 슬롯 외에 추가).",
   "config.infiniteCombining.name": "무한 반지 조합",
@@ -17,5 +18,8 @@
   "config.multipleEnchantments.name": "다중 인챈트",
   "config.multipleEnchantments.description": "기존 인챈트를 교체하는 대신 같은 무기나 도구에 여러 인챈트를 중첩할 수 있습니다.",
   "config.verbose.logging.name": "자세한 로깅",
-  "config.verbose.logging.description": "콘솔에 많은 디버그 메시지를 전송합니다."
+  "config.verbose.logging.description": "콘솔에 많은 디버그 메시지를 전송합니다.",
+  "config.uninstall.safety.paragraph": "추가 슬롯에 저장된 반지는 이 모드의 저장 데이터에 보관됩니다. 모드를 제거하기 전에 아래 버튼을 클릭하여 모든 반지를 인벤토리로 돌려보내세요 (인벤토리가 가득 찬 경우 발 앞에 떨어집니다).",
+  "config.uninstall.safety.button": "지금 모든 추가 반지 꺼내기",
+  "config.uninstall.safety.button.tooltip": "이것을 토글하면 추가 슬롯의 모든 반지가 인벤토리로 돌아갑니다. 토글 후 적용하세요."
 }

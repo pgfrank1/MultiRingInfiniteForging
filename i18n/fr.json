@@ -6,6 +6,7 @@
   "config.section.title.ring": "Emplacements d'anneau",
   "config.section.title.forge": "Forge",
   "config.section.title.verbose.logging": "Journalisation détaillée",
+  "config.section.title.uninstall": "Sécurité de désinstallation",
   "config.extraRingSlots.name": "Emplacements d'anneau supplémentaires",
   "config.extraRingSlots.description": "Combien d'emplacements d'anneau supplémentaires ajouter (en plus des 2 emplacements de base).",
   "config.infiniteCombining.name": "Combinaison infinie d'anneaux",
@@ -17,5 +18,8 @@
   "config.multipleEnchantments.name": "Enchantements multiples",
   "config.multipleEnchantments.description": "Permet d'empiler plusieurs enchantements sur la même arme ou le même outil au lieu de remplacer l'enchantement existant.",
   "config.verbose.logging.name": "Journalisation détaillée",
-  "config.verbose.logging.description": "Envoie de nombreux messages de débogage à la console."
+  "config.verbose.logging.description": "Envoie de nombreux messages de débogage à la console.",
+  "config.uninstall.safety.paragraph": "Les anneaux stockés dans les emplacements supplémentaires sont enregistrés dans les données de sauvegarde de ce mod. Avant de désinstaller le mod, cliquez sur le bouton ci-dessous pour les renvoyer tous dans votre inventaire (ou les déposer à vos pieds s'il est plein).",
+  "config.uninstall.safety.button": "Éjecter tous les anneaux supplémentaires maintenant",
+  "config.uninstall.safety.button.tooltip": "Activer cette option renvoie tous les anneaux de vos emplacements supplémentaires dans votre inventaire. Activez et appliquez."
 }

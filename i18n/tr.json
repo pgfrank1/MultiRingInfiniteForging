@@ -6,6 +6,7 @@
   "config.section.title.ring": "Yüzük yuvaları",
   "config.section.title.forge": "Dövme ocağı",
   "config.section.title.verbose.logging": "Ayrıntılı günlük kaydı",
+  "config.section.title.uninstall": "Kaldırma güvenliği",
   "config.extraRingSlots.name": "Ekstra yüzük yuvaları",
   "config.extraRingSlots.description": "Eklenecek ekstra yüzük yuvası sayısı (2 standart yuvanın yanı sıra).",
   "config.infiniteCombining.name": "Sonsuz yüzük birleştirme",
@@ -17,5 +18,8 @@
   "config.multipleEnchantments.name": "Çoklu büyüler",
   "config.multipleEnchantments.description": "Mevcut büyüyü değiştirmek yerine aynı silah veya araca birden fazla büyü eklemenizi sağlar.",
   "config.verbose.logging.name": "Ayrıntılı günlük kaydı",
-  "config.verbose.logging.description": "Konsola çok sayıda hata ayıklama mesajı gönderir."
+  "config.verbose.logging.description": "Konsola çok sayıda hata ayıklama mesajı gönderir.",
+  "config.uninstall.safety.paragraph": "Ekstra yuvalarda saklanan yüzükler bu modun kayıt verilerinde bulunur. Modu kaldırmadan önce, hepsini envanterinize geri döndürmek (veya envanter doluysa ayaklarınızın önüne bırakmak) için aşağıdaki düğmeye tıklayın.",
+  "config.uninstall.safety.button": "Tüm ekstra yüzükleri şimdi çıkar",
+  "config.uninstall.safety.button.tooltip": "Bunu değiştirmek ekstra yuvalarınızdaki tüm yüzükleri envanterinize geri döndürür. Değiştirin ve uygulayın."
 }

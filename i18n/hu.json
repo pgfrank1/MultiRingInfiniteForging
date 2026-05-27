@@ -6,6 +6,7 @@
   "config.section.title.ring": "Gyűrűhelyek",
   "config.section.title.forge": "Kovácsműhely",
   "config.section.title.verbose.logging": "Részletes naplózás",
+  "config.section.title.uninstall": "Eltávolítási biztonság",
   "config.extraRingSlots.name": "Extra gyűrűhelyek",
   "config.extraRingSlots.description": "Hány extra gyűrűhelyet adjon hozzá (a 2 alap helyen felül).",
   "config.infiniteCombining.name": "Végtelen gyűrűkombinálás",
@@ -17,5 +18,8 @@
   "config.multipleEnchantments.name": "Többszörös varázslatok",
   "config.multipleEnchantments.description": "Lehetővé teszi több varázslat halmozását ugyanazon a fegyveren vagy eszközön a meglévő csere helyett.",
   "config.verbose.logging.name": "Részletes naplózás",
-  "config.verbose.logging.description": "Sok hibakeresési üzenetet küld a konzolra."
+  "config.verbose.logging.description": "Sok hibakeresési üzenetet küld a konzolra.",
+  "config.uninstall.safety.paragraph": "Az extra helyeken tárolt gyűrűk ebben a mod mentési adataiban élnek. Az eltávolítás előtt kattints az alábbi gombra, hogy az összes gyűrűt visszakapd a leltáradba (vagy a lábaid elé kerüljenek, ha az tele van).",
+  "config.uninstall.safety.button": "Az összes extra gyűrű kilökése most",
+  "config.uninstall.safety.button.tooltip": "Ennek kapcsolásával az összes gyűrűd az extra helyekről visszakerül a leltáradba. Kapcsold be és alkalmazza."
 }

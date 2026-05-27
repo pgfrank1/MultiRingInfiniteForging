@@ -6,6 +6,7 @@
   "config.section.title.ring": "戒指槽",
   "config.section.title.forge": "锻造",
   "config.section.title.verbose.logging": "详细日志",
+  "config.section.title.uninstall": "卸载安全",
   "config.extraRingSlots.name": "额外戒指槽",
   "config.extraRingSlots.description": "要添加的额外戒指槽数量（除原有的2个槽位之外）。",
   "config.infiniteCombining.name": "无限合并戒指",
@@ -17,5 +18,8 @@
   "config.multipleEnchantments.name": "多重附魔",
   "config.multipleEnchantments.description": "允许在同一武器或工具上叠加多个附魔，而不是替换现有附魔。",
   "config.verbose.logging.name": "详细日志",
-  "config.verbose.logging.description": "向控制台发送大量调试消息。"
+  "config.verbose.logging.description": "向控制台发送大量调试消息。",
+  "config.uninstall.safety.paragraph": "存储在额外槽中的戒指保存在此模组的存档数据中。在卸载模组之前，请点击下方按钮将它们全部返还到您的背包（如果背包已满则掉落在脚下）。",
+  "config.uninstall.safety.button": "立即取出所有额外戒指",
+  "config.uninstall.safety.button.tooltip": "切换此选项会将额外槽中的所有戒指返还到您的背包。切换后点击应用。"
 }

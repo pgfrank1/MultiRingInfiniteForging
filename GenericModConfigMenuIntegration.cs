@@ -157,7 +157,8 @@ namespace MultiRingInfiniteForging
                 name: () => ModEntry.T("config.multipleEnchantments.name"),
                 tooltip: () => ModEntry.T("config.multipleEnchantments.description")
             );
-            
+            api.AddPageLink(mod.ModManifest, "", () => "", () => ""); // optional separator
+            api.AddPageLink(mod.ModManifest, "", () => "", () => ""); // optional separator
             api.AddSectionTitle(mod.ModManifest, () => ModEntry.T("config.section.title.verbose.logging"));
             
             api.AddBoolOption(
@@ -167,17 +168,9 @@ namespace MultiRingInfiniteForging
                 name: () => ModEntry.T("config.verbose.logging.name"),
                 tooltip: () => ModEntry.T("config.verbose.logging.description")
             );
-            
             // After your existing AddNumberOption / AddBoolOption calls:
-            api.AddSectionTitle(mod.ModManifest, () => "Uninstall safety");
-            
-            api.AddParagraph(mod.ModManifest, () =>
-                "Rings stored in extra slots live in this mod's save data.  Before you " +
-                "uninstall the mod, click the button below to return them all to your " +
-                "inventory (or drop them at your feet if it's full).");
-            
-            api.AddPageLink(mod.ModManifest, "", () => "", () => ""); // optional separator
-            
+            api.AddSectionTitle(mod.ModManifest, () => ModEntry.T("config.section.title.uninstall"));
+            api.AddParagraph(mod.ModManifest, () => ModEntry.T("config.uninstall.safety.paragraph"));
             api.AddBoolOption(
                 mod: mod.ModManifest,
                 getValue: () => false,
@@ -185,8 +178,8 @@ namespace MultiRingInfiniteForging
                 {
                     if (v) RingSlotManager.DrainAllToPlayer();
                 },
-                name: () => "Eject all extra rings now",
-                tooltip: () => "Toggling this returns every ring in your extra slots to your inventory.  Toggle and apply.");
+                name: () => ModEntry.T("config.uninstall.safety.button"),
+                tooltip: () => ModEntry.T("config.uninstall.safety.button.tooltip"));
         }
     }
 }

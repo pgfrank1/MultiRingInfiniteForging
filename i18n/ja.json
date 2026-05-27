@@ -6,6 +6,7 @@
   "config.section.title.ring": "リングスロット",
   "config.section.title.forge": "鍛冶",
   "config.section.title.verbose.logging": "詳細ログ",
+  "config.section.title.uninstall": "アンインストール安全機能",
   "config.extraRingSlots.name": "追加リングスロット",
   "config.extraRingSlots.description": "追加するリングスロットの数（標準の2スロットに加えて）。",
   "config.infiniteCombining.name": "無限リング合成",
@@ -17,5 +18,8 @@
   "config.multipleEnchantments.name": "複数エンチャント",
   "config.multipleEnchantments.description": "既存のエンチャントを上書きする代わりに、同じ武器やツールに複数のエンチャントを重ねがけできるようにします。",
   "config.verbose.logging.name": "詳細ログ",
-  "config.verbose.logging.description": "コンソールに多数のデバッグメッセージを送信します。"
+  "config.verbose.logging.description": "コンソールに多数のデバッグメッセージを送信します。",
+  "config.uninstall.safety.paragraph": "追加スロットに保存されたリングは、このModのセーブデータに保存されています。Modをアンインストールする前に、下のボタンをクリックしてすべてのリングをインベントリに戻してください（インベントリが満杯の場合は足元に落とされます）。",
+  "config.uninstall.safety.button": "今すぐすべての追加リングを取り出す",
+  "config.uninstall.safety.button.tooltip": "これを切り替えると、追加スロットのすべてのリングがインベントリに戻ります。切り替えて適用してください。"
 }

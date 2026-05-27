@@ -7,6 +7,8 @@
   "config.section.title.ring": "Ring Slots",
   "config.section.title.forge": "Forge",
   "config.section.title.verbose.logging": "Verbose Logging",
+  "config.section.title.uninstall": "Uninstall safety",
+  
   "config.extraRingSlots.name": "Extra Ring Slots",
   "config.extraRingSlots.description": "How many extra ring slots to add (in addition to the 2 vanilla slots).",
   "config.infiniteCombining.name": "Infinite Ring Combining",
@@ -18,5 +20,8 @@
   "config.multipleEnchantments.name": "Multiple Enchantments",
   "config.multipleEnchantments.description": "Allow stacking multiple enchantments on the same weapon or tool instead of replacing the existing enchantment.",
   "config.verbose.logging.name": "Verbose Logging",
-  "config.verbose.logging.description": "Send lots of debug messages to the console."
+  "config.verbose.logging.description": "Send lots of debug messages to the console.",
+  "config.uninstall.safety.paragraph": "Rings stored in extra slots live in this mod's save data.  Before you uninstall the mod, click the button below to return them all to your inventory (or drop them at your feet if it's full).",
+  "config.uninstall.safety.button": "Eject all extra rings now",
+  "config.uninstall.safety.button.tooltip": "Toggling this returns every ring in your extra slots to your inventory.  Toggle and apply."
 }

@@ -6,6 +6,7 @@
   "config.section.title.ring": "Ringplätze",
   "config.section.title.forge": "Schmiede",
   "config.section.title.verbose.logging": "Ausführliche Protokollierung",
+  "config.section.title.uninstall": "Deinstallationssicherheit",
   "config.extraRingSlots.name": "Zusätzliche Ringplätze",
   "config.extraRingSlots.description": "Wie viele zusätzliche Ringplätze hinzugefügt werden sollen (zusätzlich zu den 2 Standardplätzen).",
   "config.infiniteCombining.name": "Unendliches Ring-Kombinieren",
@@ -17,5 +18,8 @@
   "config.multipleEnchantments.name": "Mehrfachverzauberungen",
   "config.multipleEnchantments.description": "Erlaubt das Stapeln mehrerer Verzauberungen auf derselben Waffe oder demselben Werkzeug, anstatt die vorhandene zu ersetzen.",
   "config.verbose.logging.name": "Ausführliche Protokollierung",
-  "config.verbose.logging.description": "Sendet viele Debug-Nachrichten an die Konsole."
+  "config.verbose.logging.description": "Sendet viele Debug-Nachrichten an die Konsole.",
+  "config.uninstall.safety.paragraph": "Ringe in zusätzlichen Plätzen werden in den Speicherdaten dieses Mods gespeichert. Klicke vor der Deinstallation auf die Schaltfläche unten, um sie alle in dein Inventar zurückzugeben (oder sie zu deinen Füßen zu platzieren, falls es voll ist).",
+  "config.uninstall.safety.button": "Alle extra Ringe jetzt auswerfen",
+  "config.uninstall.safety.button.tooltip": "Durch Aktivieren dieser Option werden alle Ringe aus deinen zusätzlichen Plätzen in dein Inventar zurückgegeben. Aktivieren und anwenden."
 }
