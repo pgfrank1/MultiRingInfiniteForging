@@ -337,9 +337,12 @@ namespace MultiRingInfiniteForging
                         slotsBg.Width + 32, slotsBg.Height + 32,
                         ForgePanelTint, 1f, drawShadow: true);
 
-                    bool ringsBlocked =
+                    bool nonRingInSlot =
                         (__instance.leftIngredientSpot.item  != null && __instance.leftIngredientSpot.item  is not Ring) ||
                         (__instance.rightIngredientSpot.item != null && __instance.rightIngredientSpot.item is not Ring);
+
+                    var forgeLeftRing  = __instance.leftIngredientSpot.item  as Ring;
+                    var forgeRightRing = __instance.rightIngredientSpot.item as Ring;
 
                     foreach (var slot in Slots)
                     {
@@ -358,7 +361,30 @@ namespace MultiRingInfiniteForging
 
                         if (ring != null)
                         {
-                            if (ringsBlocked)
+                            bool blocked = nonRingInSlot;
+
+                            if (!blocked && !ModEntry.Instance.Config.InfiniteCombining)
+                            {
+                                if (forgeLeftRing != null && !IsValidCraft(__instance, forgeLeftRing, ring))
+                                    blocked = true;
+                                else if (forgeRightRing != null && forgeLeftRing == null && !IsValidCraft(__instance, ring, forgeRightRing))
+                                    blocked = true;
+                            }
+
+                            if (!blocked
+                                && ModEntry.Instance.Config.AddCombinedDuplicateRingCap
+                                && ModEntry.Instance.Config.InfiniteCombining)
+                            {
+                                // Dim if placing this panel ring into either forge slot would create a duplicate.
+                                if (forgeLeftRing != null && Patches.WouldCreateDuplicateRing(forgeLeftRing, ring))
+                                    blocked = true;
+                                else if (forgeRightRing != null && Patches.WouldCreateDuplicateRing(forgeRightRing, ring))
+                                    blocked = true;
+                                else if (forgeLeftRing != null && forgeRightRing != null && Patches.WouldCreateDuplicateRing(ring, forgeLeftRing))
+                                    blocked = true;
+                            }
+
+                            if (blocked)
                             {
                                 ring.drawInMenu(b, new Vector2(slot.bounds.X, slot.bounds.Y),
                                     scaleSize: slot.scale,
@@ -391,11 +417,18 @@ namespace MultiRingInfiniteForging
                     Item? highlightItem = Game1.player.CursorSlotItem
                                           ?? GetHeldItem(__instance)
                                           ?? __instance.hoveredItem;
+                    
+                    var leftRing  = __instance.leftIngredientSpot.item as Ring;
+                    var rightRing = __instance.rightIngredientSpot.item as Ring;
 
                     if (highlightItem is CombinedRing
-                        && (__instance.leftIngredientSpot.item == null || __instance.leftIngredientSpot.item is Ring)
-                        && (__instance.rightIngredientSpot.item == null || __instance.rightIngredientSpot.item is Ring)
-                        && !__instance.IsBusy())
+                        && __instance.leftIngredientSpot.item is null or Ring
+                        && __instance.rightIngredientSpot.item is null or Ring
+                        && !__instance.IsBusy()
+                        && ModEntry.Instance.Config.AddCombinedDuplicateRingCap
+                        && leftRing != null && rightRing != null
+                        && Patches.WouldCreateDuplicateRing(leftRing, rightRing)
+                        )
                     {
                         if (__instance.leftIngredientSpot.item == null)
                             __instance.leftIngredientSpot.draw(b, Color.White, 0.87f);
@@ -578,6 +611,14 @@ namespace MultiRingInfiniteForging
                             if (nonRingInSlot && existing is Ring)
                             {
                                 ModEntry.DiagVerbose($"[Forge] Cursor swap refused: non-ring in forge slot, refusing to lift ring ({existing.Name}) onto cursor");
+                                return false;
+                            }
+
+                            // Guard 4: duplicate cap — refuse if the ring being lifted would
+                            // be blocked by AddCombinedDuplicateRingCap.
+                            if (existing is Ring existingSwapRing && IsRingBlockedByDuplicateCap(existingSwapRing, __instance))
+                            {
+                                ModEntry.DiagVerbose($"[Forge] Cursor swap refused: {existingSwapRing.Name} blocked by duplicate cap");
                                 return false;
                             }
                         }
@@ -836,8 +877,13 @@ namespace MultiRingInfiniteForging
                 var leftRingIcon = __instance.equipmentIcons.Find(c => c.name == "Ring1");
                 if (leftRingIcon != null && leftRingIcon.containsPoint(x, y))
                 {
-                    ModEntry.DiagVerbose($"[Forge]   -> drop onto Left Ring icon");
                     Ring? existing = Game1.player.leftRing.Value;
+                    if (existing != null && IsRingBlockedByDuplicateCap(existing, __instance))
+                    {
+                        ModEntry.DiagVerbose($"[Forge]   -> Left Ring swap refused: {existing.Name} blocked by duplicate cap");
+                        return false;
+                    }
+                    ModEntry.DiagVerbose($"[Forge]   -> drop onto Left Ring icon");
                     existing?.onUnequip(Game1.player);
                     Game1.player.leftRing.Value = carriedRing;
                     carriedRing.onEquip(Game1.player);
@@ -850,8 +896,13 @@ namespace MultiRingInfiniteForging
                 var rightRingIcon = __instance.equipmentIcons.Find(c => c.name == "Ring2");
                 if (rightRingIcon != null && rightRingIcon.containsPoint(x, y))
                 {
-                    ModEntry.DiagVerbose($"[Forge]   -> drop onto Right Ring icon");
                     Ring? existing = Game1.player.rightRing.Value;
+                    if (existing != null && IsRingBlockedByDuplicateCap(existing, __instance))
+                    {
+                        ModEntry.DiagVerbose($"[Forge]   -> Right Ring swap refused: {existing.Name} blocked by duplicate cap");
+                        return false;
+                    }
+                    ModEntry.DiagVerbose($"[Forge]   -> drop onto Right Ring icon");
                     existing?.onUnequip(Game1.player);
                     Game1.player.rightRing.Value = carriedRing;
                     carriedRing.onEquip(Game1.player);
@@ -959,8 +1010,13 @@ namespace MultiRingInfiniteForging
                         int idx = SlotIndex(slot);
                         if (idx < 0) return true;
 
-                        ModEntry.DiagVerbose($"[Forge]   -> drop onto panel slot {idx}");
                         Ring? slotRing = RingSlotManager.Slots[idx];
+                        if (slotRing != null && IsRingBlockedByDuplicateCap(slotRing, __instance))
+                        {
+                            ModEntry.DiagVerbose($"[Forge]   -> panel slot {idx} swap refused: {slotRing.Name} blocked by duplicate cap");
+                            return false;
+                        }
+                        ModEntry.DiagVerbose($"[Forge]   -> drop onto panel slot {idx}");
                         RingSlotManager.Equip(idx, carriedRing);
                         Game1.player.CursorSlotItem = slotRing;
                         if (playSound) Game1.playSound("crit");
@@ -984,6 +1040,11 @@ namespace MultiRingInfiniteForging
                 if (leftRingIcon != null && leftRingIcon.containsPoint(x, y)
                     && Game1.player.leftRing.Value is Ring leftRing)
                 {
+                    if (IsRingBlockedByDuplicateCap(leftRing, __instance))
+                    {
+                        ModEntry.DiagVerbose($"[Forge] Pick up Left Ring {leftRing.Name} blocked by duplicate cap");
+                        return false;
+                    }
                     ModEntry.DiagVerbose($"[Forge] Pick up Left Ring {leftRing.Name} to cursor");
                     leftRing.onUnequip(Game1.player);
                     Game1.player.leftRing.Value = null;
@@ -996,6 +1057,11 @@ namespace MultiRingInfiniteForging
                 if (rightRingIcon != null && rightRingIcon.containsPoint(x, y)
                     && Game1.player.rightRing.Value is Ring rightRing)
                 {
+                    if (IsRingBlockedByDuplicateCap(rightRing, __instance))
+                    {
+                        ModEntry.DiagVerbose($"[Forge] Pick up Right Ring {rightRing.Name} blocked by duplicate cap");
+                        return false;
+                    }
                     ModEntry.DiagVerbose($"[Forge] Pick up Right Ring {rightRing.Name} to cursor");
                     rightRing.onUnequip(Game1.player);
                     Game1.player.rightRing.Value = null;
@@ -1005,7 +1071,27 @@ namespace MultiRingInfiniteForging
                 }
 
                 // The rest of the pickup paths only apply when the panel is open.
-                if (!_panelOpen) return true;
+                // Exception: when the duplicate cap is active and a ring is in a forge slot,
+                // we must intercept inventory clicks to block picking up blocked rings even
+                // when the panel is closed — vanilla has no knowledge of the duplicate cap.
+                if (!_panelOpen)
+                {
+                    if (ModEntry.Instance.Config.AddCombinedDuplicateRingCap
+                        && ModEntry.Instance.Config.InfiniteCombining
+                        && (__instance.leftIngredientSpot.item is Ring || __instance.rightIngredientSpot.item is Ring))
+                    {
+                        int invBlockIdx = __instance.inventory.getInventoryPositionOfClick(x, y);
+                        if (invBlockIdx >= 0
+                            && invBlockIdx < __instance.inventory.actualInventory.Count
+                            && __instance.inventory.actualInventory[invBlockIdx] is Ring invBlockRing
+                            && IsRingBlockedByDuplicateCap(invBlockRing, __instance))
+                        {
+                            ModEntry.DiagVerbose($"[Forge] Blocked vanilla inventory pickup of {invBlockRing.Name}: duplicate cap");
+                            return false;
+                        }
+                    }
+                    return true;
+                }
 
                 // Forge LEFT ingredient slot → pick up to cursor.
                 if (__instance.leftIngredientSpot.containsPoint(x, y)
@@ -1035,6 +1121,11 @@ namespace MultiRingInfiniteForging
                     && invPickIdx < __instance.inventory.actualInventory.Count
                     && __instance.inventory.actualInventory[invPickIdx] is Ring invRing)
                 {
+                    if (IsRingBlockedByDuplicateCap(invRing, __instance))
+                    {
+                        ModEntry.DiagVerbose($"[Forge] Blocked pickup of inventory ring {invRing.Name}: duplicate cap");
+                        return false;
+                    }
                     ModEntry.DiagVerbose($"[Forge] Pick up inventory ring {invRing.Name} (slot {invPickIdx}) to cursor");
                     __instance.inventory.actualInventory[invPickIdx] = null;
                     Game1.player.CursorSlotItem = invRing;
@@ -1052,6 +1143,11 @@ namespace MultiRingInfiniteForging
                     Ring? slotRing = RingSlotManager.Slots[idx];
                     if (slotRing == null) return false;
 
+                    if (IsRingBlockedByDuplicateCap(slotRing, __instance))
+                    {
+                        ModEntry.DiagVerbose($"[Forge] Blocked pickup of panel ring {slotRing.Name}: duplicate cap");
+                        return false;
+                    }
                     ModEntry.DiagVerbose($"[Forge] Pick up panel slot {idx} {slotRing.Name} to cursor");
                     RingSlotManager.Equip(idx, null);
                     Game1.player.CursorSlotItem = slotRing;
@@ -1295,6 +1391,18 @@ namespace MultiRingInfiniteForging
         // ============================================================
         //  Helpers
         // ============================================================
+
+        private static bool IsRingBlockedByDuplicateCap(Ring ring, ForgeMenu menu)
+        {
+            if (!ModEntry.Instance.Config.AddCombinedDuplicateRingCap
+                || !ModEntry.Instance.Config.InfiniteCombining)
+                return false;
+            if (menu.leftIngredientSpot.item is Ring leftRing && Patches.WouldCreateDuplicateRing(leftRing, ring))
+                return true;
+            if (menu.rightIngredientSpot.item is Ring rightRing && Patches.WouldCreateDuplicateRing(rightRing, ring))
+                return true;
+            return false;
+        }
 
         private static int SlotIndex(ClickableComponent c) =>
             int.TryParse(c.name.Replace("ExtraRing", ""), out var i) ? i : -1;

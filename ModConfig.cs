@@ -8,6 +8,14 @@
         /// <summary>Remove the cap on how many rings can be combined together.</summary>
         public bool InfiniteCombining { get; set; } = true;
         
+        /// <summary>When InfiniteCombining is on, optionally prevent a combine from
+        /// resulting in a CombinedRing that contains the same ring (by qualified
+        /// item ID) more than once.  Vanilla never produces duplicates because it
+        /// caps combines at 2; with InfiniteCombining you can stack a Magnet Ring
+        /// inside another Magnet Ring inside another — enabling this option blocks
+        /// that.</summary>
+        public bool AddCombinedDuplicateRingCap { get; set; } = false;
+        
         /// <summary>Remove the 3-gem cap on weapon forging (lets you keep applying gems
         /// to a weapon beyond level 3).</summary>
         public bool InfiniteWeaponForging { get; set; } = true;

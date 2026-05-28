@@ -99,7 +99,9 @@ namespace MultiRingInfiniteForging
                 {
                     config.ExtraRingSlots = 4;
                     config.InfiniteCombining = true;
+                    config.AddCombinedDuplicateRingCap = false;
                     config.InfiniteWeaponForging = true;
+                    config.RemoveDiamondForgesCap = false;
                     config.MultipleEnchantments = true;
                     config.VerboseLogging = false;
                 },
@@ -132,6 +134,14 @@ namespace MultiRingInfiniteForging
                 setValue: v => config.InfiniteCombining = v,
                 name: () => ModEntry.T("config.infiniteCombining.name"),
                 tooltip: () => ModEntry.T("config.infiniteCombining.description")
+            );
+            
+            api.AddBoolOption(
+                mod: mod.ModManifest,
+                getValue: () => config.AddCombinedDuplicateRingCap,
+                setValue: v => config.AddCombinedDuplicateRingCap = v,
+                name: () => ModEntry.T("config.AddCombinedDuplicateRingCap.name"),
+                tooltip: () => ModEntry.T("config.AddCombinedDuplicateRingCap.description")
             );
 
             api.AddBoolOption(

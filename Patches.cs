@@ -28,7 +28,7 @@ namespace MultiRingInfiniteForging
             //     master pipeline: BuffManager.GetValues() iterates GetEquippedItems()
             //     and calls AddEquipmentEffects on each, which is how rings contribute
             //     magnetic radius, defense, attack/crit/knockback/speed multipliers,
-            //     luck, immunity, etc.  Without this, extra-slot rings appear equipped
+            //     luck, immunity, etc. Without this, extra-slot rings appear equipped
             //     but provide no passive stat bonuses.  CombinedRing.AddEquipmentEffects
             //     recurses internally, so nested rings inside CombinedRings also work.
             try
@@ -314,8 +314,17 @@ namespace MultiRingInfiniteForging
             // are already at the cap).  This must run regardless of the incoming
             // __result, since vanilla's answer for these pairs is "false".
             if (ModEntry.Instance.Config.InfiniteCombining
-                && left_item is Ring && right_item is Ring)
+                && left_item is Ring leftRing && right_item is Ring rightRing)
             {
+                // Optional cap: refuse the combine if either side already contains a
+                // ring ID that the other side would re-introduce.  Prevents the user
+                // from stacking the same ring twice (or more) into a CombinedRing.
+                if (ModEntry.Instance.Config.AddCombinedDuplicateRingCap
+                    && WouldCreateDuplicateRing(leftRing, rightRing))
+                {
+                    __result = false;
+                    return;
+                }
                 __result = true;
                 return;
             }
@@ -390,6 +399,14 @@ namespace MultiRingInfiniteForging
                         }
                     }
                     catch { /* leave valid = false */ }
+
+                    if (valid
+                        && ModEntry.Instance.Config.AddCombinedDuplicateRingCap
+                        && ModEntry.Instance.Config.InfiniteCombining
+                        && WouldCreateDuplicateRing((Ring)leftItem, (Ring)i))
+                    {
+                        valid = false;
+                    }
 
                     __result = valid;
                     return;
@@ -687,6 +704,53 @@ namespace MultiRingInfiniteForging
 
             __result = true;
             return false; // skip vanilla
+        }
+        
+        /// <summary>True if combining <paramref name="a"/> and <paramref name="b"/>
+        /// would result in a CombinedRing containing two or more copies of the same
+        /// ring ID.  Walks each side recursively into nested CombinedRings.</summary>
+        internal static bool WouldCreateDuplicateRing(Ring a, Ring b)
+        {
+            var seen = new HashSet<string>();
+            CollectRingIds(a, seen);
+            foreach (var id in EnumerateRingIds(b))
+            {
+                if (!seen.Add(id))
+                    return true;  // already present on the left side OR duplicated within the right side itself
+            }
+            return false;
+        }
+        
+        /// <summary>Add every constituent ring ID of <paramref name="ring"/> into
+        /// <paramref name="ids"/>.  Recurses through CombinedRings.</summary>
+        private static void CollectRingIds(Ring ring, HashSet<string> ids)
+        {
+            if (ring is CombinedRing combined)
+            {
+                foreach (var inner in combined.combinedRings)
+                    CollectRingIds(inner, ids);
+            }
+            else
+            {
+                ids.Add(ring.QualifiedItemId);
+            }
+        }
+
+        /// <summary>Yield every constituent ring ID of <paramref name="ring"/>.
+        /// Used to iterate the right-hand side while checking against the left's
+        /// set without merging the two halves' sets prematurely.</summary>
+        private static IEnumerable<string> EnumerateRingIds(Ring ring)
+        {
+            if (ring is CombinedRing combined)
+            {
+                foreach (var inner in combined.combinedRings)
+                foreach (var id in EnumerateRingIds(inner))
+                    yield return id;
+            }
+            else
+            {
+                yield return ring.QualifiedItemId;
+            }
         }
     }
 }

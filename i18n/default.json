@@ -13,6 +13,8 @@
   "config.extraRingSlots.description": "How many extra ring slots to add (in addition to the 2 vanilla slots).",
   "config.infiniteCombining.name": "Infinite Ring Combining",
   "config.infiniteCombining.description": "Remove the cap on how many rings can be combined together.",
+  "config.AddCombinedDuplicateRingCap.name": "Add Combined Duplicate Ring Cap",
+  "config.AddCombinedDuplicateRingCap.description": "Prevent the same ring from being combined into the same Combined Ring multiple times.  Only takes effect when 'Infinite Ring Combining' is enabled.",
   "config.infiniteWeaponForging.name": "Infinite Weapon Forging",
   "config.infiniteWeaponForging.description": "Remove the 3-gem cap on weapon forging (lets you keep applying gems to a weapon beyond level 3).",
   "config.RemoveDiamondForgesCap.name": "Remove Diamond Forges Cap",
