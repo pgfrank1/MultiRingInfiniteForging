@@ -148,7 +148,13 @@ namespace MultiRingInfiniteForging
             EnsureSize();
             int applied = 0;
             foreach (var ring in Slots)
-                ring?.onEquip(Game1.player);
+            {
+                if (ring != null)
+                {
+                    ring.onEquip(Game1.player);
+                    applied++;
+                }
+            }
             if (Game1.player != null)
                 Game1.player.buffs.Dirty = true;
             ModEntry.Diag(
