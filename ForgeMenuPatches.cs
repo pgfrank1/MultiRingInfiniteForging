@@ -1203,27 +1203,15 @@ namespace MultiRingInfiniteForging
                 return false;
             }
 
-            // Dragon Tooth: re-rolls the secondary enchantment on a MeleeWeapon.
-            // Vanilla restricts this to non-Galaxy weapons below level 15.  We allow
-            // it on Infinity weapons too as a mod feature — re-rolling the innate
-            // enchantment on a fully-evolved Infinity weapon is a useful endgame
-            // ability that vanilla just forgot about.
+            // Dragon Tooth: re-rolls the innate stat enchantment on a MeleeWeapon.
+            // For non-Galaxy weapons below level 15, vanilla handles this.  For
+            // Galaxy/Infinity weapons the Harmony prefix (Tool_Forge_DragonToothReroll_Prefix)
+            // takes over.  We just check the weapon is valid and let the forge decide.
             if (rightItem.QualifiedItemId == "(O)852")
             {
                 if (leftTool is not StardewValley.Tools.MeleeWeapon weapon) return false;
                 if (!Patches.IsScytheForgingAllowed(weapon)) return false;
-
-                // Refuse if the weapon has no secondary enchantment to re-roll
-                // (other than GalaxySoul, which is permanent).
-                foreach (var ench in weapon.enchantments)
-                {
-                    if (ench.IsSecondaryEnchantment()
-                        && ench is not StardewValley.Enchantments.GalaxySoulEnchantment)
-                    {
-                        return true;
-                    }
-                }
-                return false;
+                return true;
             }
 
             // Diamond: weapon-only.  Gems boost weapon stats (damage/defense/crit/speed)
