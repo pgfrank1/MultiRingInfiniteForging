@@ -167,8 +167,6 @@ namespace MultiRingInfiniteForging
                 name: () => ModEntry.T("config.multipleEnchantments.name"),
                 tooltip: () => ModEntry.T("config.multipleEnchantments.description")
             );
-            api.AddPageLink(mod.ModManifest, "", () => "", () => ""); // optional separator
-            api.AddPageLink(mod.ModManifest, "", () => "", () => ""); // optional separator
             api.AddSectionTitle(mod.ModManifest, () => ModEntry.T("config.section.title.verbose.logging"));
             
             api.AddBoolOption(

@@ -380,8 +380,7 @@ namespace MultiRingInfiniteForging
                                     blocked = true;
                                 else if (forgeRightRing != null && Patches.WouldCreateDuplicateRing(forgeRightRing, ring))
                                     blocked = true;
-                                else if (forgeLeftRing != null && forgeRightRing != null && Patches.WouldCreateDuplicateRing(ring, forgeLeftRing))
-                                    blocked = true;
+
                             }
 
                             if (blocked)
@@ -486,31 +485,13 @@ namespace MultiRingInfiniteForging
             Item? heldItem = GetHeldItem(__instance);
             Item? invItemAtClick = __instance.inventory.getItemAt(x, y);
 
-            // === CONDITIONALLY UNIFY THE TWO CARRY MECHANISMS ===
-            // If the forge's private _heldItem has something and CursorSlotItem is empty,
-            // promote the held item to CursorSlotItem so our cursor-based logic can use it.
-            // EXCEPTION: don't promote if the click is on a forge ingredient slot — vanilla
-            // checks _heldItem (not CursorSlotItem) for those slots, so promoting would
-            // break the legitimate drop-into-forge-slot flow.
-            // bool clickedForgeIngredient =
-            //     __instance.leftIngredientSpot.containsPoint(x, y)
-            //     || __instance.rightIngredientSpot.containsPoint(x, y);
-            //
-            // if (Game1.player.CursorSlotItem == null && heldItem != null && !clickedForgeIngredient)
-            // {
-            //     ModEntry.DiagVerbose($"[Forge] Promoting forge.held ({heldItem.Name}) to CursorSlotItem");
-            //     Game1.player.CursorSlotItem = heldItem;
-            //     SetHeldItem(__instance, null);
-            //     heldItem = null;
-            // }
-            
             // Toggle button click — handle FIRST, always permitted.
             if (ToggleButton != null && ToggleButton.containsPoint(x, y))
             {
                 TogglePanel(playSound);
                 return false;
             }
-            
+
             // === UNIFY THE TWO CARRY MECHANISMS ===
             // If the forge's private _heldItem has something and CursorSlotItem is empty,
             // promote the held item to CursorSlotItem.  All our drop logic uses
@@ -532,23 +513,24 @@ namespace MultiRingInfiniteForging
 
             ModEntry.DiagVerbose($"[Forge]   forge.leftIngredient={__instance.leftIngredientSpot.item?.Name ?? "null"}  forge.rightIngredient={__instance.rightIngredientSpot.item?.Name ?? "null"}");
 
-            // === FULL FIELD DUMP ===
-            // Walk ForgeMenu and all base classes' instance fields, print any that hold an Item.
-            for (System.Type? t = __instance.GetType(); t != null; t = t.BaseType)
+            if (ModEntry.Instance.Config.VerboseLogging)
             {
-                foreach (var field in t.GetFields(
-                             System.Reflection.BindingFlags.Instance
-                             | System.Reflection.BindingFlags.Public
-                             | System.Reflection.BindingFlags.NonPublic
-                             | System.Reflection.BindingFlags.DeclaredOnly))
+                for (System.Type? t = __instance.GetType(); t != null; t = t.BaseType)
                 {
-                    try
+                    foreach (var field in t.GetFields(
+                                 System.Reflection.BindingFlags.Instance
+                                 | System.Reflection.BindingFlags.Public
+                                 | System.Reflection.BindingFlags.NonPublic
+                                 | System.Reflection.BindingFlags.DeclaredOnly))
                     {
-                        var val = field.GetValue(__instance);
-                        if (val is Item item)
-                            ModEntry.DiagVerbose($"[Forge]   field {t.Name}.{field.Name} = Item({item.Name})");
+                        try
+                        {
+                            var val = field.GetValue(__instance);
+                            if (val is Item item)
+                                ModEntry.DiagVerbose($"[Forge]   field {t.Name}.{field.Name} = Item({item.Name})");
+                        }
+                        catch { /* ignore */ }
                     }
-                    catch { /* ignore */ }
                 }
             }
 
@@ -755,7 +737,7 @@ namespace MultiRingInfiniteForging
 
                     // Determine if vanilla would allow this item in the left slot.
                     bool acceptsInLeft =
-                        (carriedAny is StardewValley.Tools.MeleeWeapon mw && (!mw.isScythe() || ModEntry.HasEnchantableScythes || ModEntry.HasScytheToolEnchantments))
+                        (carriedAny is StardewValley.Tools.MeleeWeapon mw && Patches.IsScytheForgingAllowed(mw))
                         || carriedAny is StardewValley.Tools.Slingshot
                         || (carriedAny is Tool t && t.UpgradeLevel > 0 && t is not StardewValley.Tools.MeleeWeapon)
                         || carriedAny is Ring;
@@ -1166,7 +1148,7 @@ namespace MultiRingInfiniteForging
         {
             if (item == null) return false;
             if (item is Ring) return true;
-            if (item is StardewValley.Tools.MeleeWeapon weapon) return !weapon.isScythe() || ModEntry.HasEnchantableScythes || ModEntry.HasScytheToolEnchantments;
+            if (item is StardewValley.Tools.MeleeWeapon weapon) return Patches.IsScytheForgingAllowed(weapon);
             if (item is StardewValley.Tools.Slingshot) return true;
             if (item is Tool) return true;
 
@@ -1196,8 +1178,8 @@ namespace MultiRingInfiniteForging
             if (leftTool is StardewValley.Tools.MeleeWeapon leftWeapon
                 && rightItem is StardewValley.Tools.MeleeWeapon rightWeapon
                 && rightWeapon.type.Value == leftWeapon.type.Value
-                && (!leftWeapon.isScythe() || ModEntry.HasEnchantableScythes || ModEntry.HasScytheToolEnchantments)
-                && (!rightWeapon.isScythe() || ModEntry.HasEnchantableScythes || ModEntry.HasScytheToolEnchantments))
+                && Patches.IsScytheForgingAllowed(leftWeapon)
+                && Patches.IsScytheForgingAllowed(rightWeapon))
             {
                 return true;
             }
@@ -1229,15 +1211,10 @@ namespace MultiRingInfiniteForging
             if (rightItem.QualifiedItemId == "(O)852")
             {
                 if (leftTool is not StardewValley.Tools.MeleeWeapon weapon) return false;
-                if (weapon.isScythe() || !ModEntry.HasEnchantableScythes || !ModEntry.HasScytheToolEnchantments) return false;
-                return true;
+                if (!Patches.IsScytheForgingAllowed(weapon)) return false;
 
-                // Vanilla rule: pre-Galaxy weapon below level 15 — straightforward.
-                //if (!weapon.Name.Contains("Galaxy") && weapon.getItemLevel() < 15)
-
-                // Mod extension: Infinity / fully-evolved Galaxy weapons can also re-roll
-                // their secondary enchantment.  Refuse if the weapon has no secondary
-                // enchantment to re-roll (other than GalaxySoul, which is permanent).
+                // Refuse if the weapon has no secondary enchantment to re-roll
+                // (other than GalaxySoul, which is permanent).
                 foreach (var ench in weapon.enchantments)
                 {
                     if (ench.IsSecondaryEnchantment()
@@ -1255,7 +1232,7 @@ namespace MultiRingInfiniteForging
             {
                 if (leftTool is not StardewValley.Tools.MeleeWeapon scytheCheck)
                     return false;
-                if (scytheCheck.isScythe() && !ModEntry.HasEnchantableScythes && !ModEntry.HasScytheToolEnchantments)
+                if (!Patches.IsScytheForgingAllowed(scytheCheck))
                     return false;
                 
                 // Respect the forge-level cap: when InfiniteWeaponForging is off,
@@ -1280,7 +1257,7 @@ namespace MultiRingInfiniteForging
             // reasoning as Diamond — these are weapon-stat enchantments.
             if (leftTool is not StardewValley.Tools.MeleeWeapon meleeForGem)
                 return false;
-            if (meleeForGem.isScythe() && !ModEntry.HasEnchantableScythes && !ModEntry.HasScytheToolEnchantments)
+            if (!Patches.IsScytheForgingAllowed(meleeForGem))
                 return false;
 
             var enchantment = StardewValley.Enchantments.BaseEnchantment

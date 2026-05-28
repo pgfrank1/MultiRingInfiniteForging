@@ -366,7 +366,7 @@ namespace MultiRingInfiniteForging
                 if (i == null) return;
 
                 // Scythes can't be forged or enchanted — always dim them.
-                if (i is MeleeWeapon scytheCheck && scytheCheck.isScythe() && !ModEntry.HasEnchantableScythes && !ModEntry.HasScytheToolEnchantments)
+                if (i is MeleeWeapon scytheCheck && !IsScytheForgingAllowed(scytheCheck))
                 {
                     __result = false;
                     return;
@@ -706,6 +706,11 @@ namespace MultiRingInfiniteForging
             return false; // skip vanilla
         }
         
+        /// <summary>True if the given weapon can be placed in a forge slot.  Non-scythes
+        /// are always allowed; scythes require an optional scythe-forging mod.</summary>
+        public static bool IsScytheForgingAllowed(MeleeWeapon weapon) =>
+            !weapon.isScythe() || ModEntry.HasEnchantableScythes || ModEntry.HasScytheToolEnchantments;
+
         /// <summary>True if combining <paramref name="a"/> and <paramref name="b"/>
         /// would result in a CombinedRing containing two or more copies of the same
         /// ring ID.  Walks each side recursively into nested CombinedRings.</summary>
