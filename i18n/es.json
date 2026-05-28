@@ -11,6 +11,8 @@
   "config.extraRingSlots.description": "Cuántas ranuras de anillo adicionales agregar (además de las 2 ranuras estándar).",
   "config.infiniteCombining.name": "Combinación infinita de anillos",
   "config.infiniteCombining.description": "Elimina el límite en la cantidad de anillos que se pueden combinar.",
+  "config.AddCombinedDuplicateRingCap.name": "Limitar anillos duplicados en combinación",
+  "config.AddCombinedDuplicateRingCap.description": "Evita que el mismo anillo se combine más de una vez en el mismo Anillo Combinado. Solo tiene efecto cuando 'Combinación infinita de anillos' está activada.",
   "config.infiniteWeaponForging.name": "Forja de armas infinita",
   "config.infiniteWeaponForging.description": "Elimina el límite de 3 gemas en la forja de armas (permite seguir aplicando gemas más allá del nivel 3).",
   "config.RemoveDiamondForgesCap.name": "Eliminar límite de forjas de diamante",

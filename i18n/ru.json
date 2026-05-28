@@ -11,6 +11,8 @@
   "config.extraRingSlots.description": "Сколько дополнительных слотов для колец добавить (помимо 2 стандартных).",
   "config.infiniteCombining.name": "Бесконечное объединение колец",
   "config.infiniteCombining.description": "Убирает ограничение на количество объединяемых колец.",
+  "config.AddCombinedDuplicateRingCap.name": "Запретить дублирование колец в комбинации",
+  "config.AddCombinedDuplicateRingCap.description": "Запрещает добавлять одно и то же кольцо более одного раза в одно Комбинированное кольцо. Действует только при включённом 'Бесконечном объединении колец'.",
   "config.infiniteWeaponForging.name": "Бесконечная ковка оружия",
   "config.infiniteWeaponForging.description": "Убирает ограничение в 3 камня при ковке оружия (позволяет вставлять камни сверх 3-го уровня).",
   "config.RemoveDiamondForgesCap.name": "Убрать ограничение алмазной ковки",

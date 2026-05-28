@@ -11,6 +11,8 @@
   "config.extraRingSlots.description": "Combien d'emplacements d'anneau supplémentaires ajouter (en plus des 2 emplacements de base).",
   "config.infiniteCombining.name": "Combinaison infinie d'anneaux",
   "config.infiniteCombining.description": "Supprime la limite du nombre d'anneaux pouvant être combinés.",
+  "config.AddCombinedDuplicateRingCap.name": "Limiter les anneaux en double dans les combinaisons",
+  "config.AddCombinedDuplicateRingCap.description": "Empêche le même anneau d'être combiné plusieurs fois dans le même Anneau Combiné. Ne prend effet que lorsque 'Combinaison infinie d'anneaux' est activée.",
   "config.infiniteWeaponForging.name": "Forge d'armes infinie",
   "config.infiniteWeaponForging.description": "Supprime la limite de 3 gemmes pour la forge d'armes (permet de continuer à appliquer des gemmes au-delà du niveau 3).",
   "config.RemoveDiamondForgesCap.name": "Supprimer la limite des forges de diamant",

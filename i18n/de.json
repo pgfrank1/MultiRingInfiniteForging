@@ -11,6 +11,8 @@
   "config.extraRingSlots.description": "Wie viele zusätzliche Ringplätze hinzugefügt werden sollen (zusätzlich zu den 2 Standardplätzen).",
   "config.infiniteCombining.name": "Unendliches Ring-Kombinieren",
   "config.infiniteCombining.description": "Entfernt die Obergrenze für die Anzahl der kombinierbaren Ringe.",
+  "config.AddCombinedDuplicateRingCap.name": "Doppelten Ring in Kombination verhindern",
+  "config.AddCombinedDuplicateRingCap.description": "Verhindert, dass derselbe Ring mehrfach in denselben Kombinierten Ring eingebaut wird. Gilt nur, wenn 'Unendliches Ring-Kombinieren' aktiviert ist.",
   "config.infiniteWeaponForging.name": "Unendliches Waffenschmieden",
   "config.infiniteWeaponForging.description": "Entfernt die 3-Edelstein-Grenze beim Waffenschmieden (ermöglicht das Einsetzen weiterer Edelsteine über Stufe 3 hinaus).",
   "config.RemoveDiamondForgesCap.name": "Diamantschmieden-Limit entfernen",

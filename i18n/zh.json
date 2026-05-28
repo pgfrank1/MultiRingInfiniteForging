@@ -11,6 +11,8 @@
   "config.extraRingSlots.description": "要添加的额外戒指槽数量（除原有的2个槽位之外）。",
   "config.infiniteCombining.name": "无限合并戒指",
   "config.infiniteCombining.description": "移除戒指合并数量的上限。",
+  "config.AddCombinedDuplicateRingCap.name": "限制合并戒指中的重复戒指",
+  "config.AddCombinedDuplicateRingCap.description": "防止同一戒指被多次合并到同一个合并戒指中。仅在启用'无限合并戒指'时生效。",
   "config.infiniteWeaponForging.name": "无限武器锻造",
   "config.infiniteWeaponForging.description": "移除武器锻造的3颗宝石上限（允许在3级以上继续镶嵌宝石）。",
   "config.RemoveDiamondForgesCap.name": "移除钻石锻造上限",

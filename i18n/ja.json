@@ -11,6 +11,8 @@
   "config.extraRingSlots.description": "追加するリングスロットの数（標準の2スロットに加えて）。",
   "config.infiniteCombining.name": "無限リング合成",
   "config.infiniteCombining.description": "合成できるリングの数の上限を解除します。",
+  "config.AddCombinedDuplicateRingCap.name": "合成リングの重複を制限",
+  "config.AddCombinedDuplicateRingCap.description": "同じリングを同一の合成リングに複数回合成することを防ぎます。「無限リング合成」が有効な場合のみ適用されます。",
   "config.infiniteWeaponForging.name": "無限武器鍛冶",
   "config.infiniteWeaponForging.description": "武器鍛冶における3宝石の上限を解除します（レベル3を超えても宝石を付与し続けられます）。",
   "config.RemoveDiamondForgesCap.name": "ダイヤモンド鍛冶上限を解除",

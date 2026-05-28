@@ -11,6 +11,8 @@
   "config.extraRingSlots.description": "Eklenecek ekstra yüzük yuvası sayısı (2 standart yuvanın yanı sıra).",
   "config.infiniteCombining.name": "Sonsuz yüzük birleştirme",
   "config.infiniteCombining.description": "Birleştirilebilecek yüzük sayısı sınırını kaldırır.",
+  "config.AddCombinedDuplicateRingCap.name": "Kombinasyonda yinelenen yüzükleri sınırla",
+  "config.AddCombinedDuplicateRingCap.description": "Aynı yüzüğün aynı Kombine Yüzüğe birden fazla kez eklenmesini engeller. Yalnızca 'Sonsuz yüzük birleştirme' etkinken geçerlidir.",
   "config.infiniteWeaponForging.name": "Sonsuz silah dövme",
   "config.infiniteWeaponForging.description": "Silah dövmedeki 3 mücevher sınırını kaldırır (seviye 3'ün ötesinde mücevher eklemeye devam etmenizi sağlar).",
   "config.RemoveDiamondForgesCap.name": "Elmas dövme sınırını kaldır",

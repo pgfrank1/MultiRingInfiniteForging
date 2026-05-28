@@ -11,6 +11,8 @@
   "config.extraRingSlots.description": "Hány extra gyűrűhelyet adjon hozzá (a 2 alap helyen felül).",
   "config.infiniteCombining.name": "Végtelen gyűrűkombinálás",
   "config.infiniteCombining.description": "Eltávolítja a kombinálható gyűrűk számának korlátját.",
+  "config.AddCombinedDuplicateRingCap.name": "Duplikált gyűrűk korlátozása kombináláskor",
+  "config.AddCombinedDuplicateRingCap.description": "Megakadályozza, hogy ugyanaz a gyűrű többször kerüljön bele ugyanabba a Kombinált Gyűrűbe. Csak akkor lép érvénybe, ha a 'Végtelen gyűrűkombinálás' engedélyezett.",
   "config.infiniteWeaponForging.name": "Végtelen fegyverkovácsolás",
   "config.infiniteWeaponForging.description": "Eltávolítja a 3 drágakő korlátot a fegyverkovácsolásnál (lehetővé teszi drágakövek alkalmazását a 3. szint felett is).",
   "config.RemoveDiamondForgesCap.name": "Gyémántkovácsolás korlátjának eltávolítása",

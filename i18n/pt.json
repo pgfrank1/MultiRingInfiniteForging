@@ -11,6 +11,8 @@
   "config.extraRingSlots.description": "Quantos slots de anel extras adicionar (além dos 2 slots padrão).",
   "config.infiniteCombining.name": "Combinação infinita de anéis",
   "config.infiniteCombining.description": "Remove o limite de quantos anéis podem ser combinados.",
+  "config.AddCombinedDuplicateRingCap.name": "Limitar anéis duplicados em combinações",
+  "config.AddCombinedDuplicateRingCap.description": "Impede que o mesmo anel seja combinado mais de uma vez no mesmo Anel Combinado. Só tem efeito quando 'Combinação infinita de anéis' está ativada.",
   "config.infiniteWeaponForging.name": "Forja de armas infinita",
   "config.infiniteWeaponForging.description": "Remove o limite de 3 gemas na forja de armas (permite continuar aplicando gemas além do nível 3).",
   "config.RemoveDiamondForgesCap.name": "Remover limite de forjas de diamante",
