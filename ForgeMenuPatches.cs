@@ -16,6 +16,10 @@ namespace MultiRingInfiniteForging
         private const int SlotSpacing = 4;
         private const int FirstSlotId = 120_000;
         private const int ToggleButtonId = 119_999;
+        private const int ScrollUpBtnId = 119_998;
+        private const int ScrollDownBtnId = 119_997;
+        private const int ScrollBtnWidth = 40;
+        private const int ScrollBtnHeight = 16;
 
         private static IMonitor Log = null!;
 
@@ -39,6 +43,10 @@ namespace MultiRingInfiniteForging
         private static readonly List<ClickableComponent> Slots = new();
         private static ClickableTextureComponent? ToggleButton;
         private static bool _panelOpen;
+        private static int _scrollOffset;
+        private static int _maxScrollOffset;
+        private static ClickableComponent? _scrollUpBtn;
+        private static ClickableComponent? _scrollDownBtn;
 
         public static bool IsPanelOpen => _panelOpen;
         
@@ -110,6 +118,61 @@ namespace MultiRingInfiniteForging
                 original: AccessTools.Method(typeof(ForgeMenu), nameof(ForgeMenu.performHoverAction)),
                 postfix: new HarmonyMethod(typeof(ForgeMenuPatches), nameof(Hover_Postfix))
             );
+
+            harmony.Patch(
+                original: AccessTools.Method(typeof(IClickableMenu), nameof(IClickableMenu.receiveScrollWheelAction)),
+                prefix: new HarmonyMethod(typeof(ForgeMenuPatches), nameof(ScrollWheel_Prefix))
+            );
+        }
+
+        public static bool ScrollWheel_Prefix(int direction)
+        {
+            if (!_panelOpen || ToggleButton == null || _maxScrollOffset <= 0) return true;
+
+            var mousePos = Game1.getMousePosition();
+            var panelBounds = GetSlotsBounds();
+            if (panelBounds == Rectangle.Empty) return true;
+
+            Rectangle scrollArea = new Rectangle(
+                panelBounds.X - 16, panelBounds.Y - 16 - ScrollBtnHeight,
+                panelBounds.Width + 32, panelBounds.Height + 32 + ScrollBtnHeight * 2);
+
+            if (!scrollArea.Contains(mousePos)) return true;
+
+            if (direction > 0 && _scrollOffset > 0)
+                _scrollOffset--;
+            else if (direction < 0 && _scrollOffset < _maxScrollOffset)
+                _scrollOffset++;
+            else
+                return true;
+
+            ApplyPanelVisibility();
+            (Game1.activeClickableMenu as ForgeMenu)?.populateClickableComponentList();
+            SnapToVisibleSlot();
+            return false;
+        }
+
+        private static void SnapToVisibleSlot()
+        {
+            if (!Game1.options.SnappyMenus) return;
+            var menu = Game1.activeClickableMenu;
+            if (menu == null) return;
+            var snapped = menu.currentlySnappedComponent;
+            if (snapped == null) return;
+            if (!snapped.name.StartsWith("ExtraRing") || snapped.name.StartsWith("ExtraRingScroll"))
+                return;
+
+            if (snapped.bounds.X <= -5000)
+            {
+                var firstVisible = Slots.FirstOrDefault(s => s.bounds.X > -5000);
+                if (firstVisible != null)
+                {
+                    menu.setCurrentlySnappedComponentTo(firstVisible.myID);
+                    return;
+                }
+            }
+
+            menu.snapCursorToCurrentSnappedComponent();
         }
 
         public static void RebuildForActiveMenu()
@@ -171,6 +234,25 @@ namespace MultiRingInfiniteForging
             };
             ToggleButton.baseScale = 4f;
 
+            _scrollUpBtn = new ClickableComponent(
+                new Rectangle(-9999, -9999, ScrollBtnWidth, ScrollBtnHeight),
+                name: "ExtraRingScrollUp")
+            {
+                myID = ScrollUpBtnId,
+                upNeighborID = -99998, downNeighborID = -99998,
+                leftNeighborID = -99998, rightNeighborID = -99998,
+                fullyImmutable = true
+            };
+            _scrollDownBtn = new ClickableComponent(
+                new Rectangle(-9999, -9999, ScrollBtnWidth, ScrollBtnHeight),
+                name: "ExtraRingScrollDown")
+            {
+                myID = ScrollDownBtnId,
+                upNeighborID = -99998, downNeighborID = -99998,
+                leftNeighborID = -99998, rightNeighborID = -99998,
+                fullyImmutable = true
+            };
+
             const int maxPerRow = 4;
             int numRows = (RingSlotManager.SlotCount + maxPerRow - 1) / maxPerRow;
 
@@ -224,49 +306,131 @@ namespace MultiRingInfiniteForging
 
             int gridEndX = ToggleButton.bounds.X - SlotSpacing * 4;
             int gridStartX = gridEndX - maxPerRow * (SlotSize + SlotSpacing);
-            int gridStartY = (menu?.equipmentIcons.Find(c => c.name == "Left Ring") is { } lr)
+            int panelTopY = (menu?.equipmentIcons.Find(c => c.name == "Left Ring") is { } lr)
                 ? lr.bounds.Y
                 : ToggleButton.bounds.Y;
 
-            for (int i = 0; i < Slots.Count; i++)
+            int totalRows = (Slots.Count + maxPerRow - 1) / maxPerRow;
+
+            if (_panelOpen)
             {
-                if (_panelOpen)
+                int bottomBoundary = Game1.uiViewport.Height - 8;
+                int availableHeight = bottomBoundary - panelTopY;
+
+                if (availableHeight < SlotSize + SlotSpacing)
                 {
-                    int col = i % maxPerRow;
+                    panelTopY = bottomBoundary - (SlotSize + SlotSpacing);
+                    if (panelTopY < 0) panelTopY = 0;
+                    availableHeight = bottomBoundary - panelTopY;
+                }
+
+                int visibleRows = System.Math.Max(1, availableHeight / (SlotSize + SlotSpacing));
+                _maxScrollOffset = System.Math.Max(0, totalRows - visibleRows);
+                _scrollOffset = System.Math.Clamp(_scrollOffset, 0, _maxScrollOffset);
+
+                // Position scroll buttons at top and bottom of visible area.
+                int scrollBtnX = gridStartX + maxPerRow * (SlotSize + SlotSpacing) - ScrollBtnWidth;
+                if (_scrollUpBtn != null)
+                    _scrollUpBtn.bounds = new Rectangle(scrollBtnX, panelTopY, ScrollBtnWidth, ScrollBtnHeight);
+                if (_scrollDownBtn != null)
+                    _scrollDownBtn.bounds = new Rectangle(scrollBtnX, panelTopY + visibleRows * (SlotSize + SlotSpacing), ScrollBtnWidth, ScrollBtnHeight);
+
+                for (int i = 0; i < Slots.Count; i++)
+                {
                     int row = i / maxPerRow;
-                    Slots[i].bounds = new Rectangle(
-                        gridStartX + col * (SlotSize + SlotSpacing),
-                        gridStartY + row * (SlotSize + SlotSpacing),
-                        SlotSize, SlotSize);
-                }
-                else
-                {
-                    Slots[i].bounds = new Rectangle(-9999, -9999, 0, 0);
-                }
-            }
+                    int col = i % maxPerRow;
 
-            // Wire inventory's leftmost column ↔ panel's rightmost column for D-pad nav.
-            if (menu != null)
-            {
-                int invCols = menu.inventory.capacity / menu.inventory.rows;
-                if (invCols <= 0) invCols = 12;
-
-                for (int row = 0; row < menu.inventory.rows; row++)
-                {
-                    int invIdx = row * invCols;
-                    if (invIdx >= menu.inventory.inventory.Count) break;
-
-                    if (_panelOpen)
+                    if (row >= _scrollOffset && row < _scrollOffset + visibleRows)
                     {
+                        int displayRow = row - _scrollOffset;
+                        Slots[i].bounds = new Rectangle(
+                            gridStartX + col * (SlotSize + SlotSpacing),
+                            panelTopY + displayRow * (SlotSize + SlotSpacing),
+                            SlotSize, SlotSize);
+
+                        bool isFirstDisplayRow = displayRow == 0;
+                        bool isLastDisplayRow = displayRow == visibleRows - 1 || row == totalRows - 1;
+                        Slots[i].leftNeighborID = col == 0 ? -99998 : FirstSlotId + i - 1;
+                        Slots[i].rightNeighborID = col == maxPerRow - 1 || i == Slots.Count - 1
+                            ? ToggleButtonId
+                            : FirstSlotId + i + 1;
+                        Slots[i].upNeighborID = isFirstDisplayRow
+                            ? ScrollUpBtnId
+                            : FirstSlotId + i - maxPerRow;
+                        Slots[i].downNeighborID = isLastDisplayRow
+                            ? ScrollDownBtnId
+                            : FirstSlotId + i + maxPerRow;
+                    }
+                    else
+                    {
+                        Slots[i].bounds = new Rectangle(-9999, -9999, 0, 0);
+                        Slots[i].leftNeighborID = -99998;
+                        Slots[i].rightNeighborID = -99998;
+                        Slots[i].upNeighborID = -99998;
+                        Slots[i].downNeighborID = -99998;
+                    }
+                }
+
+                // Wire scroll button neighbors.
+                int firstVisible = _scrollOffset * maxPerRow;
+                int lastVisible = System.Math.Min(
+                    (_scrollOffset + visibleRows - 1) * maxPerRow + maxPerRow - 1, Slots.Count - 1);
+                if (_scrollUpBtn != null)
+                {
+                    _scrollUpBtn.downNeighborID = firstVisible < Slots.Count ? Slots[firstVisible].myID : -99998;
+                    _scrollUpBtn.upNeighborID = -99998;
+                }
+                if (_scrollDownBtn != null)
+                {
+                    _scrollDownBtn.upNeighborID = lastVisible >= 0 ? Slots[lastVisible].myID : -99998;
+                    _scrollDownBtn.downNeighborID = -99998;
+                }
+
+                // Wire inventory's leftmost column ↔ panel's rightmost visible column.
+                if (menu != null)
+                {
+                    int invCols = menu.inventory.capacity / menu.inventory.rows;
+                    if (invCols <= 0) invCols = 12;
+
+                    for (int r = 0; r < menu.inventory.rows; r++)
+                    {
+                        int invIdx = r * invCols;
+                        if (invIdx >= menu.inventory.inventory.Count) break;
+
+                        int panelRow = r + _scrollOffset;
+                        if (panelRow >= totalRows) break;
                         int panelLastCol = maxPerRow - 1;
-                        int panelRow = System.Math.Min(row, (Slots.Count - 1) / maxPerRow);
                         int panelIdx = panelRow * maxPerRow + panelLastCol;
                         if (panelIdx >= Slots.Count) panelIdx = Slots.Count - 1;
                         menu.inventory.inventory[invIdx].leftNeighborID = Slots[panelIdx].myID;
                         Slots[panelIdx].rightNeighborID = menu.inventory.inventory[invIdx].myID;
                     }
-                    else
+                }
+            }
+            else
+            {
+                _scrollOffset = 0;
+                for (int i = 0; i < Slots.Count; i++)
+                {
+                    Slots[i].bounds = new Rectangle(-9999, -9999, 0, 0);
+                    Slots[i].leftNeighborID = -99998;
+                    Slots[i].rightNeighborID = -99998;
+                    Slots[i].upNeighborID = -99998;
+                    Slots[i].downNeighborID = -99998;
+                }
+                if (_scrollUpBtn != null)
+                    _scrollUpBtn.bounds = new Rectangle(-9999, -9999, 0, 0);
+                if (_scrollDownBtn != null)
+                    _scrollDownBtn.bounds = new Rectangle(-9999, -9999, 0, 0);
+
+                if (menu != null)
+                {
+                    int invCols = menu.inventory.capacity / menu.inventory.rows;
+                    if (invCols <= 0) invCols = 12;
+                    for (int r = 0; r < menu.inventory.rows; r++)
                     {
+                        int invIdx = r * invCols;
+                        if (invIdx >= menu.inventory.inventory.Count) break;
                         menu.inventory.inventory[invIdx].leftNeighborID = -99998;
                     }
                 }
@@ -282,12 +446,17 @@ namespace MultiRingInfiniteForging
         {
             _testLogOnce.Clear();
             _panelOpen = false;
+            _scrollOffset = 0;
             RebuildSlots(__instance);
 
             if (ToggleButton != null)
                 __instance.equipmentIcons.Add(ToggleButton);
             foreach (var slot in Slots)
                 __instance.equipmentIcons.Add(slot);
+            if (_scrollUpBtn != null)
+                __instance.equipmentIcons.Add(_scrollUpBtn);
+            if (_scrollDownBtn != null)
+                __instance.equipmentIcons.Add(_scrollDownBtn);
 
             var rightRing = __instance.equipmentIcons.Find(c => c.name == "Right Ring");
             if (rightRing != null && ToggleButton != null)
@@ -426,6 +595,16 @@ namespace MultiRingInfiniteForging
                             }
                         }
                     }
+
+                    // Scroll indicators.
+                    if (_scrollOffset > 0 && _scrollUpBtn != null)
+                        Utility.drawTextWithShadow(b, "▲", Game1.smallFont,
+                            new Vector2(_scrollUpBtn.bounds.X, _scrollUpBtn.bounds.Y - 2),
+                            Game1.textColor);
+                    if (_scrollOffset < _maxScrollOffset && _scrollDownBtn != null)
+                        Utility.drawTextWithShadow(b, "▼", Game1.smallFont,
+                            new Vector2(_scrollDownBtn.bounds.X, _scrollDownBtn.bounds.Y - 2),
+                            Game1.textColor);
                 }
             
                 DrawCombinedRingGlow(__instance, b);
@@ -451,6 +630,7 @@ namespace MultiRingInfiniteForging
             int minX = int.MaxValue, minY = int.MaxValue, maxX = int.MinValue, maxY = int.MinValue;
             foreach (var s in Slots)
             {
+                if (s.bounds.X <= -5000) continue;
                 if (s.bounds.X < minX) minX = s.bounds.X;
                 if (s.bounds.Y < minY) minY = s.bounds.Y;
                 if (s.bounds.Right > maxX) maxX = s.bounds.Right;
@@ -513,6 +693,27 @@ namespace MultiRingInfiniteForging
             {
                 TogglePanel(playSound);
                 return false;
+            }
+
+            // Scroll buttons.
+            if (_panelOpen)
+            {
+                if (_scrollUpBtn != null && _scrollUpBtn.containsPoint(x, y) && _scrollOffset > 0)
+                {
+                    _scrollOffset--;
+                    ApplyPanelVisibility();
+                    (Game1.activeClickableMenu as ForgeMenu)?.populateClickableComponentList();
+                    SnapToVisibleSlot();
+                    return false;
+                }
+                if (_scrollDownBtn != null && _scrollDownBtn.containsPoint(x, y) && _scrollOffset < _maxScrollOffset)
+                {
+                    _scrollOffset++;
+                    ApplyPanelVisibility();
+                    (Game1.activeClickableMenu as ForgeMenu)?.populateClickableComponentList();
+                    SnapToVisibleSlot();
+                    return false;
+                }
             }
 
             // === UNIFY THE TWO CARRY MECHANISMS ===

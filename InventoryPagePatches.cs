@@ -17,12 +17,20 @@ namespace MultiRingInfiniteForging
         private const int SlotSpacing = 4;
         private const int FirstSlotId = 110_000;
         private const int ToggleButtonId = 109_999;
+        private const int ScrollUpBtnId = 109_998;
+        private const int ScrollDownBtnId = 109_997;
+        private const int ScrollBtnWidth = 40;
+        private const int ScrollBtnHeight = 16;
 
         private static IMonitor Log = null!;
 
         private static readonly List<ClickableComponent> Slots = new();
         private static ClickableTextureComponent? ToggleButton;
         private static bool _panelOpen;
+        private static int _scrollOffset;
+        private static int _maxScrollOffset;
+        private static ClickableComponent? _scrollUpBtn;
+        private static ClickableComponent? _scrollDownBtn;
 
         public static bool IsPanelOpen => _panelOpen;
 
@@ -56,6 +64,66 @@ namespace MultiRingInfiniteForging
                 original: AccessTools.Method(typeof(InventoryPage), nameof(InventoryPage.performHoverAction)),
                 postfix: new HarmonyMethod(typeof(InventoryPagePatches), nameof(Hover_Postfix))
             );
+
+            harmony.Patch(
+                original: AccessTools.Method(typeof(IClickableMenu), nameof(IClickableMenu.receiveScrollWheelAction)),
+                prefix: new HarmonyMethod(typeof(InventoryPagePatches), nameof(ScrollWheel_Prefix))
+            );
+        }
+
+        public static bool ScrollWheel_Prefix(int direction)
+        {
+            if (!_panelOpen || ToggleButton == null || _maxScrollOffset <= 0) return true;
+
+            var mousePos = Game1.getMousePosition();
+            var panelBounds = GetPanelBackground();
+            if (panelBounds == Rectangle.Empty) return true;
+
+            Rectangle scrollArea = new Rectangle(
+                panelBounds.X - 16, panelBounds.Y - 16 - ScrollBtnHeight,
+                panelBounds.Width + 32, panelBounds.Height + 32 + ScrollBtnHeight * 2);
+
+            if (!scrollArea.Contains(mousePos)) return true;
+
+            if (direction > 0 && _scrollOffset > 0)
+                _scrollOffset--;
+            else if (direction < 0 && _scrollOffset < _maxScrollOffset)
+                _scrollOffset++;
+            else
+                return true;
+
+            ApplyPanelVisibility();
+            if (Game1.activeClickableMenu is GameMenu gm1
+                && gm1.pages[GameMenu.inventoryTab] is InventoryPage page)
+            {
+                page.populateClickableComponentList();
+                gm1.populateClickableComponentList();
+            }
+            SnapToVisibleSlot();
+            return false;
+        }
+
+        private static void SnapToVisibleSlot()
+        {
+            if (!Game1.options.SnappyMenus) return;
+            if (Game1.activeClickableMenu is not GameMenu gm) return;
+            if (gm.pages[GameMenu.inventoryTab] is not InventoryPage page) return;
+            var snapped = page.currentlySnappedComponent;
+            if (snapped == null) return;
+            if (!snapped.name.StartsWith("ExtraRing") || snapped.name.StartsWith("ExtraRingScroll"))
+                return;
+
+            if (snapped.bounds.X <= -5000)
+            {
+                var firstVisible = Slots.FirstOrDefault(s => s.bounds.X > -5000);
+                if (firstVisible != null)
+                {
+                    page.setCurrentlySnappedComponentTo(firstVisible.myID);
+                    return;
+                }
+            }
+
+            page.snapCursorToCurrentSnappedComponent();
         }
 
         public static void RebuildForActiveMenu()
@@ -89,6 +157,8 @@ namespace MultiRingInfiniteForging
         {
             Slots.Clear();
             ToggleButton = null;
+            _scrollUpBtn = null;
+            _scrollDownBtn = null;
             RingSlotManager.EnsureSize();
 
             var toggleBounds = GetToggleBounds(page);
@@ -115,16 +185,56 @@ namespace MultiRingInfiniteForging
             int gridStartY = toggleBounds.Y;
             const int maxPerRow = 6;
 
+            int panelTopY = toggleBounds.Y;
+            int availableHeight = (Game1.uiViewport.Height - 16) - panelTopY;
+            int maxVisibleRows = availableHeight / (SlotSize + SlotSpacing);
+            if (maxVisibleRows < 1) maxVisibleRows = 1;
+
+            int totalRows = (RingSlotManager.SlotCount + maxPerRow - 1) / maxPerRow;
+            _maxScrollOffset = totalRows > maxVisibleRows ? totalRows - maxVisibleRows : 0;
+            if (_scrollOffset > _maxScrollOffset) _scrollOffset = _maxScrollOffset;
+
+            // Scroll up button (top of panel)
+            int scrollBtnX = gridStartX + maxPerRow * (SlotSize + SlotSpacing) - ScrollBtnWidth;
+            _scrollUpBtn = new ClickableComponent(
+                new Rectangle(scrollBtnX, panelTopY, ScrollBtnWidth, ScrollBtnHeight),
+                name: "ExtraRingScrollUp")
+            {
+                myID = ScrollUpBtnId,
+                upNeighborID = -99998,
+                downNeighborID = -99998,
+                leftNeighborID = -99998,
+                rightNeighborID = -99998
+            };
+
+            // Scroll down button (bottom of panel)
+            _scrollDownBtn = new ClickableComponent(
+                new Rectangle(scrollBtnX, panelTopY + maxVisibleRows * (SlotSize + SlotSpacing), ScrollBtnWidth, ScrollBtnHeight),
+                name: "ExtraRingScrollDown")
+            {
+                myID = ScrollDownBtnId,
+                upNeighborID = -99998,
+                downNeighborID = -99998,
+                leftNeighborID = -99998,
+                rightNeighborID = -99998
+            };
+
             for (int i = 0; i < RingSlotManager.SlotCount; i++)
             {
                 int col = i % maxPerRow;
                 int row = i / maxPerRow;
 
+                bool visible = row >= _scrollOffset && row < _scrollOffset + maxVisibleRows;
+
+                int displayRow = row - _scrollOffset;
+
                 var slot = new ClickableComponent(
-                    new Rectangle(
-                        gridStartX + col * (SlotSize + SlotSpacing),
-                        gridStartY + row * (SlotSize + SlotSpacing),
-                        SlotSize, SlotSize),
+                    visible
+                        ? new Rectangle(
+                            gridStartX + col * (SlotSize + SlotSpacing),
+                            panelTopY + displayRow * (SlotSize + SlotSpacing),
+                            SlotSize, SlotSize)
+                        : new Rectangle(-9999, -9999, 0, 0),
                     name: "ExtraRing" + i)
                 {
                     myID = FirstSlotId + i,
@@ -134,10 +244,33 @@ namespace MultiRingInfiniteForging
                     rightNeighborID = (col == maxPerRow - 1 || i == RingSlotManager.SlotCount - 1)
                         ? -99998
                         : FirstSlotId + i + 1,
-                    upNeighborID = row == 0 ? -99998 : FirstSlotId + i - maxPerRow,
+                    upNeighborID = -99998,
                     downNeighborID = -99998,
                     fullyImmutable = true
                 };
+
+                // Wire D-pad navigation for visible rows
+                if (visible)
+                {
+                    if (displayRow == 0)
+                    {
+                        slot.upNeighborID = ScrollUpBtnId;
+                    }
+                    else
+                    {
+                        slot.upNeighborID = FirstSlotId + i - maxPerRow;
+                    }
+
+                    if (displayRow == maxVisibleRows - 1 || row == totalRows - 1)
+                    {
+                        slot.downNeighborID = ScrollDownBtnId;
+                    }
+                    else
+                    {
+                        slot.downNeighborID = FirstSlotId + i + maxPerRow;
+                    }
+                }
+
                 Slots.Add(slot);
             }
 
@@ -152,21 +285,83 @@ namespace MultiRingInfiniteForging
                 ? Slots[0].myID
                 : -99998;
 
+            int gridStartX = ToggleButton.bounds.X + SlotSize + SlotSpacing * 2;
+            int panelTopY = ToggleButton.bounds.Y;
+            const int maxPerRow = 6;
+
+            int windowBottom = Game1.uiViewport.Height - 16;
+            int availableHeight = windowBottom - panelTopY;
+
+            if (availableHeight < SlotSize + SlotSpacing)
+            {
+                panelTopY = windowBottom - (SlotSize + SlotSpacing);
+                if (panelTopY < 0) panelTopY = 0;
+                availableHeight = windowBottom - panelTopY;
+            }
+
+            int maxVisibleRows = availableHeight / (SlotSize + SlotSpacing);
+            if (maxVisibleRows < 1) maxVisibleRows = 1;
+
+            int totalRows = (RingSlotManager.SlotCount + maxPerRow - 1) / maxPerRow;
+            _maxScrollOffset = totalRows > maxVisibleRows ? totalRows - maxVisibleRows : 0;
+            if (_scrollOffset > _maxScrollOffset) _scrollOffset = _maxScrollOffset;
+
+            var firstVisibleSlot = -1;
+            var lastVisibleSlot = -1;
+
             for (int i = 0; i < Slots.Count; i++)
             {
-                if (_panelOpen)
+                int row = i / maxPerRow;
+                bool visible = _panelOpen && row >= _scrollOffset && row < _scrollOffset + maxVisibleRows;
+
+                if (visible)
                 {
-                    int col = i % 6;
-                    int row = i / 6;
+                    int displayRow = row - _scrollOffset;
+                    int col = i % maxPerRow;
                     Slots[i].bounds = new Rectangle(
-                        ToggleButton.bounds.X + SlotSize + SlotSpacing * 2 + col * (SlotSize + SlotSpacing),
-                        ToggleButton.bounds.Y + row * (SlotSize + SlotSpacing),
+                        gridStartX + col * (SlotSize + SlotSpacing),
+                        panelTopY + displayRow * (SlotSize + SlotSpacing),
                         SlotSize, SlotSize);
+
+                    if (firstVisibleSlot < 0) firstVisibleSlot = i;
+                    lastVisibleSlot = i;
+
+                    if (displayRow == 0)
+                        Slots[i].upNeighborID = ScrollUpBtnId;
+                    else
+                        Slots[i].upNeighborID = FirstSlotId + i - maxPerRow;
+
+                    if (displayRow == maxVisibleRows - 1 || row == totalRows - 1)
+                        Slots[i].downNeighborID = ScrollDownBtnId;
+                    else
+                        Slots[i].downNeighborID = FirstSlotId + i + maxPerRow;
                 }
                 else
                 {
                     Slots[i].bounds = new Rectangle(-9999, -9999, 0, 0);
+                    Slots[i].upNeighborID = -99998;
+                    Slots[i].downNeighborID = -99998;
                 }
+            }
+
+            if (_scrollUpBtn != null)
+            {
+                int scrollBtnX = gridStartX + maxPerRow * (SlotSize + SlotSpacing) - ScrollBtnWidth;
+                _scrollUpBtn.bounds = new Rectangle(scrollBtnX, panelTopY, ScrollBtnWidth, ScrollBtnHeight);
+                _scrollUpBtn.leftNeighborID = -99998;
+                _scrollUpBtn.rightNeighborID = -99998;
+                _scrollUpBtn.downNeighborID = firstVisibleSlot >= 0 ? FirstSlotId + firstVisibleSlot : -99998;
+                _scrollUpBtn.visible = _panelOpen && _scrollOffset > 0;
+            }
+
+            if (_scrollDownBtn != null)
+            {
+                int scrollBtnX = gridStartX + maxPerRow * (SlotSize + SlotSpacing) - ScrollBtnWidth;
+                _scrollDownBtn.bounds = new Rectangle(scrollBtnX, panelTopY + maxVisibleRows * (SlotSize + SlotSpacing), ScrollBtnWidth, ScrollBtnHeight);
+                _scrollDownBtn.leftNeighborID = -99998;
+                _scrollDownBtn.rightNeighborID = -99998;
+                _scrollDownBtn.upNeighborID = lastVisibleSlot >= 0 ? FirstSlotId + lastVisibleSlot : -99998;
+                _scrollDownBtn.visible = _panelOpen && _scrollOffset < _maxScrollOffset;
             }
         }
 
@@ -178,12 +373,17 @@ namespace MultiRingInfiniteForging
         public static void Ctor_Postfix(InventoryPage __instance)
         {
             _panelOpen = false;
+            _scrollOffset = 0;
             RebuildSlots(__instance);
 
             if (ToggleButton != null)
                 __instance.equipmentIcons.Add(ToggleButton);
             foreach (var slot in Slots)
                 __instance.equipmentIcons.Add(slot);
+            if (_scrollUpBtn != null)
+                __instance.equipmentIcons.Add(_scrollUpBtn);
+            if (_scrollDownBtn != null)
+                __instance.equipmentIcons.Add(_scrollDownBtn);
 
             var boots = __instance.equipmentIcons.Find(c => c.name == "Boots");
             if (boots != null && ToggleButton != null)
@@ -230,8 +430,19 @@ namespace MultiRingInfiniteForging
                     panelBg.X, panelBg.Y, panelBg.Width, panelBg.Height,
                     Color.White, 1f, drawShadow: true);
 
+                // Scroll up arrow
+                if (_scrollUpBtn != null && _scrollOffset > 0)
+                {
+                    Color arrowCol = _scrollUpBtn.containsPoint(Game1.getOldMouseX(), Game1.getOldMouseY())
+                        ? Color.Gold : Color.White;
+                    Utility.drawWithShadow(b, Game1.mouseCursors,
+                        new Vector2(_scrollUpBtn.bounds.X, _scrollUpBtn.bounds.Y),
+                        new Rectangle(76, 72, 40, 16), arrowCol, 0f, Vector2.Zero, 1f);
+                }
+
                 foreach (var slot in Slots)
                 {
+                    if (slot.bounds.Width <= 0) continue;
                     int idx = SlotIndex(slot);
                     var ring = idx >= 0 && idx < RingSlotManager.Slots.Count
                         ? RingSlotManager.Slots[idx]
@@ -243,6 +454,16 @@ namespace MultiRingInfiniteForging
                         Color.White);
 
                     ring?.drawInMenu(b, new Vector2(slot.bounds.X, slot.bounds.Y), slot.scale);
+                }
+
+                // Scroll down arrow
+                if (_scrollDownBtn != null && _scrollOffset < _maxScrollOffset)
+                {
+                    Color arrowCol = _scrollDownBtn.containsPoint(Game1.getOldMouseX(), Game1.getOldMouseY())
+                        ? Color.Gold : Color.White;
+                    Utility.drawWithShadow(b, Game1.mouseCursors,
+                        new Vector2(_scrollDownBtn.bounds.X, _scrollDownBtn.bounds.Y),
+                        new Rectangle(76, 88, 40, 16), arrowCol, 0f, Vector2.Zero, 1f);
                 }
             }
 
@@ -271,6 +492,7 @@ namespace MultiRingInfiniteForging
             int minX = int.MaxValue, minY = int.MaxValue, maxX = int.MinValue, maxY = int.MinValue;
             foreach (var s in Slots)
             {
+                if (s.bounds.Width <= 0) continue;
                 if (s.bounds.X < minX) minX = s.bounds.X;
                 if (s.bounds.Y < minY) minY = s.bounds.Y;
                 if (s.bounds.Right > maxX) maxX = s.bounds.Right;
@@ -299,6 +521,36 @@ namespace MultiRingInfiniteForging
                 {
                     ModEntry.DiagVerbose("[Test] Inventory panel closed, passing click to vanilla");
                     return true;
+                }
+
+                // Scroll buttons
+                if (_scrollUpBtn != null && _scrollUpBtn.containsPoint(x, y))
+                {
+                    if (_scrollOffset > 0) _scrollOffset--;
+                    ApplyPanelVisibility();
+                    if (Game1.activeClickableMenu is GameMenu gm
+                        && gm.pages[GameMenu.inventoryTab] is InventoryPage page)
+                    {
+                        page.populateClickableComponentList();
+                        gm.populateClickableComponentList();
+                    }
+                    SnapToVisibleSlot();
+                    if (playSound) Game1.playSound("bigDeSelect");
+                    return false;
+                }
+                if (_scrollDownBtn != null && _scrollDownBtn.containsPoint(x, y))
+                {
+                    if (_scrollOffset < _maxScrollOffset) _scrollOffset++;
+                    ApplyPanelVisibility();
+                    if (Game1.activeClickableMenu is GameMenu gm
+                        && gm.pages[GameMenu.inventoryTab] is InventoryPage page)
+                    {
+                        page.populateClickableComponentList();
+                        gm.populateClickableComponentList();
+                    }
+                    SnapToVisibleSlot();
+                    if (playSound) Game1.playSound("bigDeSelect");
+                    return false;
                 }
 
                 foreach (var slot in Slots)
