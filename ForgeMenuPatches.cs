@@ -253,12 +253,15 @@ namespace MultiRingInfiniteForging
                 fullyImmutable = true
             };
 
-            const int maxPerRow = 4;
+            int rightEdge = toggleBounds.X - SlotSpacing * 4;
+            int leftMargin = 8;
+            int maxPerRow = System.Math.Clamp(
+                (rightEdge - leftMargin) / (SlotSize + SlotSpacing), 1, 4);
             int numRows = (RingSlotManager.SlotCount + maxPerRow - 1) / maxPerRow;
 
             ClickableComponent? leftRing = menu.equipmentIcons.Find(c => c.name == "Left Ring");
             int panelTopY = leftRing?.bounds.Y ?? toggleBounds.Y;
-            int gridEndX = toggleBounds.X - SlotSpacing * 4;
+            int gridEndX = rightEdge;
             int gridStartX = gridEndX - maxPerRow * (SlotSize + SlotSpacing);
             int gridStartY = panelTopY;
 
@@ -295,7 +298,10 @@ namespace MultiRingInfiniteForging
         {
             if (ToggleButton == null) return;
 
-            const int maxPerRow = 4;
+            int rightEdge = ToggleButton.bounds.X - SlotSpacing * 4;
+            int leftMargin = 8;
+            int maxPerRow = System.Math.Clamp(
+                (rightEdge - leftMargin) / (SlotSize + SlotSpacing), 1, 4);
 
             ToggleButton.leftNeighborID = _panelOpen && Slots.Count > 0
                 ? Slots[System.Math.Min(maxPerRow - 1, Slots.Count - 1)].myID
