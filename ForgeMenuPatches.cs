@@ -1231,6 +1231,12 @@ namespace MultiRingInfiniteForging
             if (leftRingIcon != null && leftRingIcon.containsPoint(x, y))
             {
                 Ring? existing = Game1.player.leftRing.Value;
+                if (existing != null && !IsRingAllowedInForgeContext(existing, menu))
+                {
+                    ModEntry.DiagVerbose("[Test] Forge cursor drop blocked: " + existing.Name + " dimmed");
+                    ModEntry.DiagVerbose($"[Forge]   -> Left Ring swap refused: {existing.Name} dimmed by forge context");
+                    return false;
+                }
                 if (existing != null && IsRingBlockedByDuplicateCap(existing, menu))
                 {
                     ModEntry.DiagVerbose("[Test] Forge cursor drop blocked: " + existing.Name + " duplicate cap on left ring");
@@ -1252,6 +1258,12 @@ namespace MultiRingInfiniteForging
             if (rightRingIcon != null && rightRingIcon.containsPoint(x, y))
             {
                 Ring? existing = Game1.player.rightRing.Value;
+                if (existing != null && !IsRingAllowedInForgeContext(existing, menu))
+                {
+                    ModEntry.DiagVerbose("[Test] Forge cursor drop blocked: " + existing.Name + " dimmed");
+                    ModEntry.DiagVerbose($"[Forge]   -> Right Ring swap refused: {existing.Name} dimmed by forge context");
+                    return false;
+                }
                 if (existing != null && IsRingBlockedByDuplicateCap(existing, menu))
                 {
                     ModEntry.DiagVerbose("[Test] Forge cursor drop blocked: " + existing.Name + " duplicate cap on right ring");
