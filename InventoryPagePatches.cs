@@ -27,10 +27,13 @@ namespace MultiRingInfiniteForging
         private static readonly List<ClickableComponent> Slots = new();
         private static ClickableTextureComponent? ToggleButton;
         private static bool _panelOpen;
+        private static bool _userPanelOpen;
         private static int _scrollOffset;
         private static int _maxScrollOffset;
         private static ClickableComponent? _scrollUpBtn;
         private static ClickableComponent? _scrollDownBtn;
+        private static int _lastVpW = -1;
+        private static int _lastVpH = -1;
 
         public static bool IsPanelOpen => _panelOpen;
 
@@ -68,11 +71,6 @@ namespace MultiRingInfiniteForging
             harmony.Patch(
                 original: AccessTools.Method(typeof(IClickableMenu), nameof(IClickableMenu.receiveScrollWheelAction)),
                 prefix: new HarmonyMethod(typeof(InventoryPagePatches), nameof(ScrollWheel_Prefix))
-            );
-
-            harmony.Patch(
-                original: AccessTools.Method(typeof(IClickableMenu), nameof(IClickableMenu.gameWindowSizeChanged)),
-                postfix: new HarmonyMethod(typeof(InventoryPagePatches), nameof(WindowResized_Postfix))
             );
         }
 
@@ -129,34 +127,6 @@ namespace MultiRingInfiniteForging
             }
 
             page.snapCursorToCurrentSnappedComponent();
-        }
-
-        public static void WindowResized_Postfix(IClickableMenu __instance)
-        {
-            if (Game1.activeClickableMenu is not GameMenu gm) return;
-            if (__instance != gm) return;
-            if (gm.pages[GameMenu.inventoryTab] is not InventoryPage page) return;
-
-            page.equipmentIcons.RemoveAll(c =>
-                c.name.StartsWith("ExtraRing") || c.name == "ExtraRingToggle");
-
-            RebuildSlots(page);
-
-            if (ToggleButton != null)
-                page.equipmentIcons.Add(ToggleButton);
-            foreach (var slot in Slots)
-                page.equipmentIcons.Add(slot);
-            if (_scrollUpBtn != null)
-                page.equipmentIcons.Add(_scrollUpBtn);
-            if (_scrollDownBtn != null)
-                page.equipmentIcons.Add(_scrollDownBtn);
-
-            var boots = page.equipmentIcons.Find(c => c.name == "Boots");
-            if (boots != null && ToggleButton != null)
-                boots.downNeighborID = ToggleButton.myID;
-
-            page.populateClickableComponentList();
-            gm.populateClickableComponentList();
         }
 
         public static void RebuildForActiveMenu()
@@ -697,6 +667,7 @@ namespace MultiRingInfiniteForging
         public static void TogglePanel(bool playSound)
         {
             _panelOpen = !_panelOpen;
+            _userPanelOpen = _panelOpen;
             ModEntry.DiagVerbose("[Test] Inventory panel toggled: open=" + _panelOpen);
             ApplyPanelVisibility();
             if (playSound) Game1.playSound(_panelOpen ? "bigSelect" : "bigDeSelect");
@@ -725,6 +696,38 @@ namespace MultiRingInfiniteForging
 
         public static void Hover_Postfix(InventoryPage __instance, int x, int y)
         {
+            var vp = Game1.uiViewport;
+            if (vp.Width != _lastVpW || vp.Height != _lastVpH)
+            {
+                _lastVpW = vp.Width;
+                _lastVpH = vp.Height;
+                var gm = Game1.activeClickableMenu as GameMenu;
+                var page = gm?.pages[GameMenu.inventoryTab] as InventoryPage;
+                if (page != null)
+                {
+                    bool wasOpen = _userPanelOpen;
+                    _panelOpen = true;
+                    page.equipmentIcons.RemoveAll(c =>
+                        c.name.StartsWith("ExtraRing") || c.name == "ExtraRingToggle");
+                    RebuildSlots(page);
+                    if (ToggleButton != null)
+                        page.equipmentIcons.Add(ToggleButton);
+                    foreach (var slot in Slots)
+                        page.equipmentIcons.Add(slot);
+                    if (_scrollUpBtn != null)
+                        page.equipmentIcons.Add(_scrollUpBtn);
+                    if (_scrollDownBtn != null)
+                        page.equipmentIcons.Add(_scrollDownBtn);
+                    var boots = page.equipmentIcons.Find(c => c.name == "Boots");
+                    if (boots != null && ToggleButton != null)
+                        boots.downNeighborID = ToggleButton.myID;
+                    _panelOpen = wasOpen;
+                    ApplyPanelVisibility();
+                    page.populateClickableComponentList();
+                    gm?.populateClickableComponentList();
+                }
+            }
+
             _hoverText = "";
 
             if (ToggleButton != null && ToggleButton.containsPoint(x, y))
