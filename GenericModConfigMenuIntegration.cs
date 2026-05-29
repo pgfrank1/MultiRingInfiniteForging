@@ -43,7 +43,7 @@ namespace MultiRingInfiniteForging
                 name: () => ModEntry.T("config.extraRingSlots.name"),
                 tooltip: () => ModEntry.T("config.extraRingSlots.description"),
                 min: 0,
-                max: 32,
+                max: 36,
                 interval: 1
             );
 
