@@ -192,9 +192,10 @@ namespace MultiRingInfiniteForging
             }
             
             // 9) Cap Diamond forges at 3 per craft.  Vanilla computes the per-craft cap
-            //    as GetMaxForges() - GetTotalForgeLevels(); with InfiniteWeaponForging
-            //    that becomes int.MaxValue, so a single Diamond fills all 6 gem slots.
-            //    Intercept the Diamond branch and emulate the vanilla 3-per-craft cap.
+            //    as GetMaxForges() - GetTotalForgeLevels(); with an unlimited cap
+            //    (WeaponForgingCap == -1) that becomes int.MaxValue, so a single
+            //    Diamond fills all 6 gem slots.  Intercept the Diamond branch and
+            //    emulate the vanilla 3-per-craft cap.
             try
             {
                 var forgeMethod = AccessTools.Method(typeof(Tool),
@@ -513,8 +514,10 @@ namespace MultiRingInfiniteForging
         /// vanilla's call to base.AddEnchantment ourselves and skip the original.</summary>
         public static void MeleeWeapon_GetMaxForges_Postfix(ref int __result)
         {
-            if (ModEntry.Instance.Config.InfiniteWeaponForging)
+            if (ModEntry.Instance.Config.WeaponForgingCap == -1)
                 __result = int.MaxValue;
+            else if (ModEntry.Instance.Config.WeaponForgingCap >= 0)
+                __result = ModEntry.Instance.Config.WeaponForgingCap;
         }
 
         /// <summary>Stop Tool.AddEnchantment from removing the existing enchantments of
@@ -543,10 +546,11 @@ namespace MultiRingInfiniteForging
         /// <summary>After a successful Diamond forge, strip the leftover
         /// DiamondEnchantment from the tool.  Vanilla leaves it on so the tooltip
         /// displays "+N Random Forges" (where N = GetMaxForges() - GetTotalForgeLevels()).
-        /// With InfiniteWeaponForging that displays as "+2147483641 Random Forges"
-        /// because GetMaxForges() is int.MaxValue.  Without InfiniteWeaponForging the
-        /// tooltip ends up at "+0 Random Forges" once the tool hits the 3-gem cap.
-        /// Either way the line is misleading — strip the marker so the tooltip is clean.</summary>
+        /// With an unlimited cap (WeaponForgingCap == -1) that displays as
+        /// "+2147483641 Random Forges" because GetMaxForges() is int.MaxValue.
+        /// With a finite cap the tooltip ends up at "+0 Random Forges" once the
+        /// tool hits the cap.  Either way the line is misleading — strip the marker
+        /// so the tooltip is clean.</summary>
         public static void Tool_Forge_Postfix(Tool __instance, Item item, bool __result)
         {
             if (!__result) return;
@@ -564,10 +568,10 @@ namespace MultiRingInfiniteForging
         }
         /// <summary>Replace Tool.Forge's Diamond branch with a vanilla-faithful 3-per-craft
         /// version.  Vanilla's code uses GetMaxForges() - GetTotalForgeLevels() as the
-        /// per-craft cap; our InfiniteWeaponForging patch makes GetMaxForges() return
-        /// int.MaxValue, so a single Diamond fills all 6 gem enchantment slots in one
-        /// shot.  We emulate vanilla's "up to 3 random gems per Diamond" behaviour here
-        /// and then short-circuit vanilla.
+        /// per-craft cap; an unlimited cap (WeaponForgingCap == -1) makes GetMaxForges()
+        /// return int.MaxValue, so a single Diamond fills all 6 gem enchantment slots in
+        /// one shot.  We emulate vanilla's "up to 3 random gems per Diamond" behaviour
+        /// here and then short-circuit vanilla.
         ///
         /// <paramref name="count_towards_stats"/> is part of Tool.Forge's signature and
         /// required by Harmony for argument binding.  Vanilla's Diamond branch doesn't
@@ -577,9 +581,6 @@ namespace MultiRingInfiniteForging
         public static bool Tool_Forge_Diamond_Prefix(
             Tool __instance, Item item, bool count_towards_stats, ref bool __result)
         {
-            if (!ModEntry.Instance.Config.InfiniteWeaponForging)
-                return true; // let vanilla handle it as normal
-
             if (item?.QualifiedItemId != "(O)72")
                 return true; // not a Diamond — let vanilla handle the rest
 

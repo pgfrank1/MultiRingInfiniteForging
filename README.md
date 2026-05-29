@@ -18,8 +18,8 @@ on weapons, and stackable enchantments — all configurable.
 - **Infinite ring combining** — merge rings without the vanilla cap.  Stack
   duplicates, combine already-combined rings, build whatever ring tower you
   like.
-- **Infinite weapon forging** — removes the 3-level lifetime cap on weapon
-  gem forging.  Keep applying gems to level them past vanilla limits.
+- **Configurable weapon forging cap** — set a custom gem forge limit per weapon
+  (or -1 for unlimited).  Keep applying gems past vanilla limits.
 - **Multiple enchantments** — stack named secondary enchantments instead of
   replacing them on each Prismatic Shard forge.
 - **Dragon Tooth on endgame weapons** — re-roll the innate stat on Galaxy
@@ -44,7 +44,7 @@ Every feature is independently toggleable via `config.json` or the in-game
 |---|---|---|
 | `ExtraRingSlots` | `4` | How many extra ring slots to add (0–16). |
 | `InfiniteCombining` | `true` | Allow combining rings beyond the vanilla cap. |
-| `InfiniteWeaponForging` | `true` | Allow gem forges beyond the 3-level lifetime cap. |
+| `WeaponForgingCap` | `-1` | Maximum gem forges per weapon (`-1` = unlimited, `0` = none, `3` = vanilla, any `N` = cap). |
 | `RemoveDiamondForgesCap` | `false` | When true, Diamond can keep adding gem enchantments even after all six types are present.  Off by default to preserve vanilla feel. |
 | `MultipleEnchantments` | `true` | Stack secondary enchantments instead of replacing them. |
 | `VerboseLogging` | `false` | Emit per-second diagnostic snapshots to `smapi-latest.log`.  Off by default; enable when reporting bugs. |

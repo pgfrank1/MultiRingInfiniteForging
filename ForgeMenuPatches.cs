@@ -1223,11 +1223,11 @@ namespace MultiRingInfiniteForging
                 if (!Patches.IsScytheForgingAllowed(scytheCheck))
                     return false;
                 
-                // Respect the forge-level cap: when InfiniteWeaponForging is off,
-                // vanilla caps total forges at GetMaxForges() (default 3).  A Diamond
+                // Respect the forge-level cap: WeaponForgingCap controls GetMaxForges()
+                // (default -1 = unlimited, otherwise the configured cap).  A Diamond
                 // craft at the cap is a no-op (consumes the diamond + shards, adds
-                // nothing).  Refuse.
-                if (leftTool.GetTotalForgeLevels() >= leftTool.GetMaxForges() && !ModEntry.Instance.Config.RemoveDiamondForgesCap)
+                // nothing).  Refuse regardless of RemoveDiamondForgesCap.
+                if (leftTool.GetTotalForgeLevels() >= leftTool.GetMaxForges())
                     return false;
 
                 bool anyMissing =

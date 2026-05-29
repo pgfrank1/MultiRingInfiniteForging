@@ -16,9 +16,8 @@
         /// that.</summary>
         public bool AddCombinedDuplicateRingCap { get; set; } = false;
         
-        /// <summary>Remove the 3-gem cap on weapon forging (lets you keep applying gems
-        /// to a weapon beyond level 3).</summary>
-        public bool InfiniteWeaponForging { get; set; } = true;
+        /// <summary>Maximum number of gem forges per weapon (-1 = unlimited).</summary>
+        public int WeaponForgingCap { get; set; } = -1;
         
         public bool RemoveDiamondForgesCap { get; set; } = false;
 
