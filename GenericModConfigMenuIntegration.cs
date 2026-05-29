@@ -86,8 +86,9 @@ namespace MultiRingInfiniteForging
                 allowedValues: forgingPresets,
                 formatAllowedValue: v => v switch
                 {
-                    "-1" => "Unlimited",
-                    "0" => "None (0)",
+                    "-1" => ModEntry.T("config.WeaponForgingCap.valueUnlimited"),
+                    "0" => ModEntry.T("config.WeaponForgingCap.valueNone"),
+                    "3" => ModEntry.T("config.WeaponForgingCap.valueDefault"),
                     _ => v
                 }
             );
