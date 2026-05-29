@@ -20,6 +20,8 @@ namespace MultiRingInfiniteForging
         private const int ScrollDownBtnId = 119_997;
         private const int ScrollBtnWidth = 40;
         private const int ScrollBtnHeight = 16;
+        private const int ScrollBarWidth = 6;
+        private const int ScrollBarGap = 4;
 
         private static IMonitor Log = null!;
 
@@ -45,6 +47,7 @@ namespace MultiRingInfiniteForging
         private static bool _panelOpen;
         private static int _scrollOffset;
         private static int _maxScrollOffset;
+        private static int _visibleRows;
         private static ClickableComponent? _scrollUpBtn;
         private static ClickableComponent? _scrollDownBtn;
         private static int _lastVpW = -1;
@@ -333,11 +336,12 @@ namespace MultiRingInfiniteForging
                 }
 
                 int visibleRows = System.Math.Max(1, availableHeight / (SlotSize + SlotSpacing));
+                _visibleRows = visibleRows;
                 _maxScrollOffset = System.Math.Max(0, totalRows - visibleRows);
                 _scrollOffset = System.Math.Clamp(_scrollOffset, 0, _maxScrollOffset);
 
                 // Position scroll buttons at top and bottom of visible area.
-                int scrollBtnX = gridStartX + maxPerRow * (SlotSize + SlotSpacing) - ScrollBtnWidth;
+                int scrollBtnX = gridStartX - ScrollBarGap - ScrollBtnWidth;
                 if (_scrollUpBtn != null)
                     _scrollUpBtn.bounds = new Rectangle(scrollBtnX, panelTopY, ScrollBtnWidth, ScrollBtnHeight);
                 if (_scrollDownBtn != null)
@@ -604,15 +608,43 @@ namespace MultiRingInfiniteForging
                         }
                     }
 
+                    // Scroll bar.
+                    if (_scrollUpBtn != null && _scrollDownBtn != null && _maxScrollOffset > 0)
+                    {
+                        int trackX = _scrollUpBtn.bounds.X + (ScrollBtnWidth - ScrollBarWidth) / 2;
+                        int trackY = _scrollUpBtn.bounds.Y;
+                        int trackH = _scrollDownBtn.bounds.Bottom - trackY;
+                        b.Draw(Game1.staminaRect,
+                            new Rectangle(trackX, trackY, ScrollBarWidth, trackH),
+                            new Color(0x40, 0x18, 0x10) * 0.7f);
+
+                        int totalRows = _maxScrollOffset + _visibleRows;
+                        int thumbH = System.Math.Max(ScrollBarWidth * 2,
+                            trackH * _visibleRows / totalRows);
+                        int thumbY = trackY +
+                            (trackH - thumbH) * _scrollOffset / _maxScrollOffset;
+                        b.Draw(Game1.staminaRect,
+                            new Rectangle(trackX, thumbY, ScrollBarWidth, thumbH),
+                            ForgeSlotFill);
+                    }
+
                     // Scroll indicators.
                     if (_scrollOffset > 0 && _scrollUpBtn != null)
-                        Utility.drawTextWithShadow(b, "▲", Game1.smallFont,
-                            new Vector2(_scrollUpBtn.bounds.X, _scrollUpBtn.bounds.Y - 2),
-                            Game1.textColor);
+                    {
+                        Color arrowCol = _scrollUpBtn.containsPoint(Game1.getOldMouseX(), Game1.getOldMouseY())
+                            ? Color.Gold : ForgeSlotFill;
+                        Utility.drawWithShadow(b, Game1.mouseCursors,
+                            new Vector2(_scrollUpBtn.bounds.X, _scrollUpBtn.bounds.Y),
+                            new Rectangle(76, 72, 40, 16), arrowCol, 0f, Vector2.Zero, 1f);
+                    }
                     if (_scrollOffset < _maxScrollOffset && _scrollDownBtn != null)
-                        Utility.drawTextWithShadow(b, "▼", Game1.smallFont,
-                            new Vector2(_scrollDownBtn.bounds.X, _scrollDownBtn.bounds.Y - 2),
-                            Game1.textColor);
+                    {
+                        Color arrowCol = _scrollDownBtn.containsPoint(Game1.getOldMouseX(), Game1.getOldMouseY())
+                            ? Color.Gold : ForgeSlotFill;
+                        Utility.drawWithShadow(b, Game1.mouseCursors,
+                            new Vector2(_scrollDownBtn.bounds.X, _scrollDownBtn.bounds.Y),
+                            new Rectangle(76, 88, 40, 16), arrowCol, 0f, Vector2.Zero, 1f);
+                    }
                 }
             
                 DrawCombinedRingGlow(__instance, b);

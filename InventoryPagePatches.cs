@@ -21,6 +21,8 @@ namespace MultiRingInfiniteForging
         private const int ScrollDownBtnId = 109_997;
         private const int ScrollBtnWidth = 40;
         private const int ScrollBtnHeight = 16;
+        private const int ScrollBarWidth = 6;
+        private const int ScrollBarGap = 4;
 
         private static IMonitor Log = null!;
 
@@ -30,6 +32,7 @@ namespace MultiRingInfiniteForging
         private static bool _userPanelOpen;
         private static int _scrollOffset;
         private static int _maxScrollOffset;
+        private static int _visibleRows;
         private static ClickableComponent? _scrollUpBtn;
         private static ClickableComponent? _scrollDownBtn;
         private static int _lastVpW = -1;
@@ -192,13 +195,14 @@ namespace MultiRingInfiniteForging
             int availableHeight = (Game1.uiViewport.Height - 16) - panelTopY;
             int maxVisibleRows = availableHeight / (SlotSize + SlotSpacing);
             if (maxVisibleRows < 1) maxVisibleRows = 1;
+            _visibleRows = maxVisibleRows;
 
             int totalRows = (RingSlotManager.SlotCount + maxPerRow - 1) / maxPerRow;
             _maxScrollOffset = totalRows > maxVisibleRows ? totalRows - maxVisibleRows : 0;
             if (_scrollOffset > _maxScrollOffset) _scrollOffset = _maxScrollOffset;
 
             // Scroll up button (top of panel)
-            int scrollBtnX = gridStartX + maxPerRow * (SlotSize + SlotSpacing) - ScrollBtnWidth;
+            int scrollBtnX = gridStartX + maxPerRow * (SlotSize + SlotSpacing) + ScrollBarGap;
             _scrollUpBtn = new ClickableComponent(
                 new Rectangle(scrollBtnX, panelTopY, ScrollBtnWidth, ScrollBtnHeight),
                 name: "ExtraRingScrollUp")
@@ -304,6 +308,7 @@ namespace MultiRingInfiniteForging
 
             int maxVisibleRows = availableHeight / (SlotSize + SlotSpacing);
             if (maxVisibleRows < 1) maxVisibleRows = 1;
+            _visibleRows = maxVisibleRows;
 
             int totalRows = (RingSlotManager.SlotCount + maxPerRow - 1) / maxPerRow;
             _maxScrollOffset = totalRows > maxVisibleRows ? totalRows - maxVisibleRows : 0;
@@ -349,7 +354,7 @@ namespace MultiRingInfiniteForging
 
             if (_scrollUpBtn != null)
             {
-                int scrollBtnX = gridStartX + maxPerRow * (SlotSize + SlotSpacing) - ScrollBtnWidth;
+                int scrollBtnX = gridStartX + maxPerRow * (SlotSize + SlotSpacing) + ScrollBarGap;
                 _scrollUpBtn.bounds = new Rectangle(scrollBtnX, panelTopY, ScrollBtnWidth, ScrollBtnHeight);
                 _scrollUpBtn.leftNeighborID = -99998;
                 _scrollUpBtn.rightNeighborID = -99998;
@@ -359,7 +364,7 @@ namespace MultiRingInfiniteForging
 
             if (_scrollDownBtn != null)
             {
-                int scrollBtnX = gridStartX + maxPerRow * (SlotSize + SlotSpacing) - ScrollBtnWidth;
+                int scrollBtnX = gridStartX + maxPerRow * (SlotSize + SlotSpacing) + ScrollBarGap;
                 _scrollDownBtn.bounds = new Rectangle(scrollBtnX, panelTopY + maxVisibleRows * (SlotSize + SlotSpacing), ScrollBtnWidth, ScrollBtnHeight);
                 _scrollDownBtn.leftNeighborID = -99998;
                 _scrollDownBtn.rightNeighborID = -99998;
@@ -433,16 +438,6 @@ namespace MultiRingInfiniteForging
                     panelBg.X, panelBg.Y, panelBg.Width, panelBg.Height,
                     Color.White, 1f, drawShadow: true);
 
-                // Scroll up arrow
-                if (_scrollUpBtn != null && _scrollOffset > 0)
-                {
-                    Color arrowCol = _scrollUpBtn.containsPoint(Game1.getOldMouseX(), Game1.getOldMouseY())
-                        ? Color.Gold : Color.White;
-                    Utility.drawWithShadow(b, Game1.mouseCursors,
-                        new Vector2(_scrollUpBtn.bounds.X, _scrollUpBtn.bounds.Y),
-                        new Rectangle(76, 72, 40, 16), arrowCol, 0f, Vector2.Zero, 1f);
-                }
-
                 foreach (var slot in Slots)
                 {
                     if (slot.bounds.Width <= 0) continue;
@@ -457,6 +452,36 @@ namespace MultiRingInfiniteForging
                         Color.White);
 
                     ring?.drawInMenu(b, new Vector2(slot.bounds.X, slot.bounds.Y), slot.scale);
+                }
+
+                // Scroll bar.
+                if (_scrollUpBtn != null && _scrollDownBtn != null && _maxScrollOffset > 0)
+                {
+                    int trackX = _scrollUpBtn.bounds.X + (ScrollBtnWidth - ScrollBarWidth) / 2;
+                    int trackY = _scrollUpBtn.bounds.Y;
+                    int trackH = _scrollDownBtn.bounds.Bottom - trackY;
+                    b.Draw(Game1.staminaRect,
+                        new Rectangle(trackX, trackY, ScrollBarWidth, trackH),
+                        new Color(60, 60, 60, 180));
+
+                    int totalRows = _maxScrollOffset + _visibleRows;
+                    int thumbH = System.Math.Max(ScrollBarWidth * 2,
+                        trackH * _visibleRows / totalRows);
+                    int thumbY = trackY +
+                        (trackH - thumbH) * _scrollOffset / _maxScrollOffset;
+                    b.Draw(Game1.staminaRect,
+                        new Rectangle(trackX, thumbY, ScrollBarWidth, thumbH),
+                        Color.White * 0.9f);
+                }
+
+                // Scroll up arrow
+                if (_scrollUpBtn != null && _scrollOffset > 0)
+                {
+                    Color arrowCol = _scrollUpBtn.containsPoint(Game1.getOldMouseX(), Game1.getOldMouseY())
+                        ? Color.Gold : Color.White;
+                    Utility.drawWithShadow(b, Game1.mouseCursors,
+                        new Vector2(_scrollUpBtn.bounds.X, _scrollUpBtn.bounds.Y),
+                        new Rectangle(76, 72, 40, 16), arrowCol, 0f, Vector2.Zero, 1f);
                 }
 
                 // Scroll down arrow
