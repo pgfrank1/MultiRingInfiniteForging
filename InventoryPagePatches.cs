@@ -69,6 +69,11 @@ namespace MultiRingInfiniteForging
                 original: AccessTools.Method(typeof(IClickableMenu), nameof(IClickableMenu.receiveScrollWheelAction)),
                 prefix: new HarmonyMethod(typeof(InventoryPagePatches), nameof(ScrollWheel_Prefix))
             );
+
+            harmony.Patch(
+                original: AccessTools.Method(typeof(IClickableMenu), nameof(IClickableMenu.gameWindowSizeChanged)),
+                postfix: new HarmonyMethod(typeof(InventoryPagePatches), nameof(WindowResized_Postfix))
+            );
         }
 
         public static bool ScrollWheel_Prefix(int direction)
@@ -124,6 +129,34 @@ namespace MultiRingInfiniteForging
             }
 
             page.snapCursorToCurrentSnappedComponent();
+        }
+
+        public static void WindowResized_Postfix(IClickableMenu __instance)
+        {
+            if (Game1.activeClickableMenu is not GameMenu gm) return;
+            if (__instance != gm) return;
+            if (gm.pages[GameMenu.inventoryTab] is not InventoryPage page) return;
+
+            page.equipmentIcons.RemoveAll(c =>
+                c.name.StartsWith("ExtraRing") || c.name == "ExtraRingToggle");
+
+            RebuildSlots(page);
+
+            if (ToggleButton != null)
+                page.equipmentIcons.Add(ToggleButton);
+            foreach (var slot in Slots)
+                page.equipmentIcons.Add(slot);
+            if (_scrollUpBtn != null)
+                page.equipmentIcons.Add(_scrollUpBtn);
+            if (_scrollDownBtn != null)
+                page.equipmentIcons.Add(_scrollDownBtn);
+
+            var boots = page.equipmentIcons.Find(c => c.name == "Boots");
+            if (boots != null && ToggleButton != null)
+                boots.downNeighborID = ToggleButton.myID;
+
+            page.populateClickableComponentList();
+            gm.populateClickableComponentList();
         }
 
         public static void RebuildForActiveMenu()

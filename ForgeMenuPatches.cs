@@ -123,6 +123,11 @@ namespace MultiRingInfiniteForging
                 original: AccessTools.Method(typeof(IClickableMenu), nameof(IClickableMenu.receiveScrollWheelAction)),
                 prefix: new HarmonyMethod(typeof(ForgeMenuPatches), nameof(ScrollWheel_Prefix))
             );
+
+            harmony.Patch(
+                original: AccessTools.Method(typeof(IClickableMenu), nameof(IClickableMenu.gameWindowSizeChanged)),
+                postfix: new HarmonyMethod(typeof(ForgeMenuPatches), nameof(WindowResized_Postfix))
+            );
         }
 
         public static bool ScrollWheel_Prefix(int direction)
@@ -173,6 +178,31 @@ namespace MultiRingInfiniteForging
             }
 
             menu.snapCursorToCurrentSnappedComponent();
+        }
+
+        public static void WindowResized_Postfix(IClickableMenu __instance)
+        {
+            if (__instance is not ForgeMenu menu) return;
+
+            menu.equipmentIcons.RemoveAll(c =>
+                c.name.StartsWith("ExtraRing") || c.name == "ExtraRingToggle");
+
+            RebuildSlots(menu);
+
+            if (ToggleButton != null)
+                menu.equipmentIcons.Add(ToggleButton);
+            foreach (var slot in Slots)
+                menu.equipmentIcons.Add(slot);
+            if (_scrollUpBtn != null)
+                menu.equipmentIcons.Add(_scrollUpBtn);
+            if (_scrollDownBtn != null)
+                menu.equipmentIcons.Add(_scrollDownBtn);
+
+            var rightRing = menu.equipmentIcons.Find(c => c.name == "Right Ring");
+            if (rightRing != null && ToggleButton != null)
+                rightRing.downNeighborID = ToggleButton.myID;
+
+            menu.populateClickableComponentList();
         }
 
         public static void RebuildForActiveMenu()
