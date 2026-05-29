@@ -1409,6 +1409,12 @@ namespace MultiRingInfiniteForging
             if (leftRingIcon != null && leftRingIcon.containsPoint(x, y)
                 && Game1.player.leftRing.Value is Ring leftRing)
             {
+                if (!IsRingAllowedInForgeContext(leftRing, menu))
+                {
+                    ModEntry.DiagVerbose("[Test] Forge pickup blocked: " + leftRing.Name + " dimmed");
+                    ModEntry.DiagVerbose($"[Forge] Pick up Left Ring {leftRing.Name} dimmed by forge context");
+                    return false;
+                }
                 if (IsRingBlockedByDuplicateCap(leftRing, menu))
                 {
                     ModEntry.DiagVerbose("[Test] Forge pickup blocked: " + leftRing.Name + " duplicate cap on left ring");
@@ -1428,6 +1434,12 @@ namespace MultiRingInfiniteForging
             if (rightRingIcon != null && rightRingIcon.containsPoint(x, y)
                 && Game1.player.rightRing.Value is Ring rightRing)
             {
+                if (!IsRingAllowedInForgeContext(rightRing, menu))
+                {
+                    ModEntry.DiagVerbose("[Test] Forge pickup blocked: " + rightRing.Name + " dimmed");
+                    ModEntry.DiagVerbose($"[Forge] Pick up Right Ring {rightRing.Name} dimmed by forge context");
+                    return false;
+                }
                 if (IsRingBlockedByDuplicateCap(rightRing, menu))
                 {
                     ModEntry.DiagVerbose("[Test] Forge pickup blocked: " + rightRing.Name + " duplicate cap on right ring");
