@@ -33,6 +33,7 @@ namespace MultiRingInfiniteForging
                     var ring = Overflow[0];
                     Overflow.RemoveAt(0);
                     Slots.Add(ring);
+                    ModEntry.DiagVerbose("[Test] SlotManager: restored " + (ring?.DisplayName ?? "null") + " from overflow");
                     // Re-apply effects since this ring is once again "equipped".
                     ring?.onEquip(Game1.player);
                 }
@@ -53,6 +54,7 @@ namespace MultiRingInfiniteForging
                 {
                     ring.onUnequip(Game1.player);
                     Overflow.Add(ring);
+                    ModEntry.DiagVerbose("[Test] SlotManager: moved " + ring.DisplayName + " to overflow (slot count shrank)");
                 }
             }
 
@@ -91,6 +93,7 @@ namespace MultiRingInfiniteForging
             if (drained > 0 && Game1.player != null)
                 Game1.player.buffs.Dirty = true;
 
+            ModEntry.DiagVerbose("[Test] SlotManager: drained " + drained + " rings to player");
             return drained;
         }
         
@@ -100,10 +103,15 @@ namespace MultiRingInfiniteForging
         /// current location (e.g. mid-save-transition).</summary>
         private static void ReturnRingToPlayer(Ring ring)
         {
-            if (ring == null) return;
+            if (ring == null)
+            {
+                ModEntry.DiagVerbose("[Test] ReturnRingToPlayer: null ring");
+                return;
+            }
             var player = Game1.player;
             if (player == null)
             {
+                ModEntry.DiagVerbose("[Test] ReturnRingToPlayer: no player; ring " + ring.DisplayName + " orphaned");
                 ModEntry.DiagVerbose($"ReturnRingToPlayer: no player; ring {ring.DisplayName} dropped (data orphaned)");
                 return;
             }
@@ -112,6 +120,7 @@ namespace MultiRingInfiniteForging
             var leftover = player.addItemToInventory(ring);
             if (leftover == null)
             {
+                ModEntry.DiagVerbose("[Test] ReturnRingToPlayer: " + ring.DisplayName + " → inventory");
                 ModEntry.DiagVerbose($"ReturnRingToPlayer: {ring.DisplayName} -> inventory");
                 return;
             }
@@ -124,6 +133,7 @@ namespace MultiRingInfiniteForging
                 Game1.addHUDMessage(new HUDMessage(
                     $"{leftover.DisplayName} dropped on the ground (inventory full).",
                     HUDMessage.error_type));
+                ModEntry.DiagVerbose("[Test] ReturnRingToPlayer: " + ring.DisplayName + " → ground");
                 ModEntry.DiagVerbose($"ReturnRingToPlayer: {ring.DisplayName} -> ground at {player.Position}");
                 return;
             }
@@ -133,10 +143,12 @@ namespace MultiRingInfiniteForging
             if (Game1.getLocationFromName("FarmHouse") is GameLocation farmhouse)
             {
                 Game1.createItemDebris(leftover, new Microsoft.Xna.Framework.Vector2(8, 9) * Game1.tileSize, -1, farmhouse);
+                ModEntry.DiagVerbose("[Test] ReturnRingToPlayer: " + ring.DisplayName + " → farmhouse");
                 ModEntry.DiagVerbose($"ReturnRingToPlayer: {ring.DisplayName} -> dropped in farmhouse (no current location)");
             }
             else
             {
+                ModEntry.DiagVerbose("[Test] ReturnRingToPlayer: " + ring.DisplayName + " orphaned (no location)");
                 ModEntry.DiagVerbose($"ReturnRingToPlayer: {ring.DisplayName} could not be placed (no location available)");
             }
         }
@@ -259,6 +271,7 @@ namespace MultiRingInfiniteForging
             }
 
             EnsureSize();
+            ModEntry.DiagVerbose("[Test] SlotManager: loaded " + Slots.Count + " slots, " + Overflow.Count + " overflow");
         }
 
         public static void Save(IModHelper helper)

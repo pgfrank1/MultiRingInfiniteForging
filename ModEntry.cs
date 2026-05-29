@@ -41,7 +41,7 @@ namespace MultiRingInfiniteForging
             Instance = this;
             Config = helper.ReadConfig<ModConfig>();
             
-            // Mod Compatability
+            // Mod Compatibility
             HasEnchantableScythes = helper.ModRegistry.IsLoaded("Goldenrevolver.EnchantableScythes");
             HasScytheToolEnchantments = helper.ModRegistry.IsLoaded("mushymato.ScytheToolEnchantments");
             
@@ -59,6 +59,19 @@ namespace MultiRingInfiniteForging
                     Monitor.Log("Scythe Tool Enchantments mod found, enabling scythe enchantment support", LogLevel.Info);
                     break;
             }
+
+            // Compatiblity with other mods that add extra equipment slots.
+            bool hasWearMoreRings = helper.ModRegistry.IsLoaded("bcmpinc.WearMoreRings");
+            bool hasWearMoreTrinkets = helper.ModRegistry.IsLoaded("Goldenrevolver.WearMoreTrinkets");
+            if (hasWearMoreRings)
+                Monitor.Log(
+                    "Wear More Rings detected. Both mods add extra ring slots — only one set will display if both are active. " +
+                    "Disable one of them to avoid confusion.",
+                    LogLevel.Warn);
+            if (hasWearMoreTrinkets)
+                Monitor.Log(
+                    "Wear More Trinkets detected. This mod adds a trinket slot; extra ring slots from MultiRings should coexist.",
+                    LogLevel.Info);
 
             helper.Events.GameLoop.GameLaunched += OnGameLaunched;
             helper.Events.GameLoop.SaveLoaded += OnSaveLoaded;
@@ -98,6 +111,7 @@ namespace MultiRingInfiniteForging
                 return;
             }
 
+            DiagVerbose("[Test] DumpStatsCommand invoked");
             var p = Game1.player;
             var b = p.buffs;
             var loc = p.currentLocation;

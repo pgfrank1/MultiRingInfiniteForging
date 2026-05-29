@@ -174,6 +174,7 @@ namespace MultiRingInfiniteForging
         //  Inject into equipmentIcons
         // ============================================================
 
+        [HarmonyPriority(Priority.Last)]
         public static void Ctor_Postfix(InventoryPage __instance)
         {
             _panelOpen = false;
@@ -187,6 +188,8 @@ namespace MultiRingInfiniteForging
             var boots = __instance.equipmentIcons.Find(c => c.name == "Boots");
             if (boots != null && ToggleButton != null)
                 boots.downNeighborID = ToggleButton.myID;
+
+            ModEntry.DiagVerbose("[Test] Inventory panel initialized with " + Slots.Count + " slots");
         }
 
         // ============================================================
@@ -287,11 +290,16 @@ namespace MultiRingInfiniteForging
             {
                 if (ToggleButton != null && ToggleButton.containsPoint(x, y))
                 {
+                    ModEntry.DiagVerbose("[Test] Inventory toggle clicked, panel=" + !_panelOpen);
                     TogglePanel(playSound);
                     return false;
                 }
 
-                if (!_panelOpen) return true;
+                if (!_panelOpen)
+                {
+                    ModEntry.DiagVerbose("[Test] Inventory panel closed, passing click to vanilla");
+                    return true;
+                }
 
                 foreach (var slot in Slots)
                 {
@@ -301,10 +309,15 @@ namespace MultiRingInfiniteForging
                     if (idx < 0) return true;
 
                     Item? held = Game1.player.CursorSlotItem;
-                    if (held != null && held is not Ring) return false;
+                    if (held != null && held is not Ring)
+                    {
+                        ModEntry.DiagVerbose("[Test] Inventory panel blocked: " + held.Name + " is not a ring");
+                        return false;
+                    }
 
                     Ring? heldRing = held as Ring;
                     Ring? current = RingSlotManager.Slots[idx];
+                    ModEntry.DiagVerbose("[Test] Inventory panel left-click: slot " + idx + " " + (heldRing?.Name ?? "empty") + " ↔ " + (current?.Name ?? "empty"));
 
                     RingSlotManager.Equip(idx, heldRing);
                     Game1.player.CursorSlotItem = current;
@@ -342,6 +355,7 @@ namespace MultiRingInfiniteForging
 
                         if (firstEmpty >= 0)
                         {
+                            ModEntry.DiagVerbose("[Test] Inventory: right-click transfer " + clickedRing.Name + " → panel slot " + firstEmpty);
                             clickedRing.onUnequip(Game1.player);
                             if (clickedLeft)  Game1.player.leftRing.Value  = null;
                             else              Game1.player.rightRing.Value = null;
@@ -354,7 +368,11 @@ namespace MultiRingInfiniteForging
                     }
                 }
 
-                if (!_panelOpen) return true;
+                if (!_panelOpen)
+                {
+                    ModEntry.DiagVerbose("[Test] Inventory panel closed, right-click passed to vanilla");
+                    return true;
+                }
 
                 foreach (var slot in Slots)
                 {
@@ -369,11 +387,13 @@ namespace MultiRingInfiniteForging
                     Ring? heldRing = Game1.player.CursorSlotItem as Ring;
                     if (heldRing != null)
                     {
+                        ModEntry.DiagVerbose("[Test] Inventory: right-click swap " + heldRing.Name + " ↔ " + ring.Name + " in slot " + idx);
                         RingSlotManager.Equip(idx, heldRing);
                         Game1.player.CursorSlotItem = ring;
                     }
                     else
                     {
+                        ModEntry.DiagVerbose("[Test] Inventory: right-click unequip " + ring.Name + " from slot " + idx + " to inventory");
                         RingSlotManager.Equip(idx, null);
                         var leftover = Game1.player.addItemToInventory(ring);
                         if (leftover != null) Game1.player.CursorSlotItem = leftover;
@@ -392,6 +412,7 @@ namespace MultiRingInfiniteForging
         public static void TogglePanel(bool playSound)
         {
             _panelOpen = !_panelOpen;
+            ModEntry.DiagVerbose("[Test] Inventory panel toggled: open=" + _panelOpen);
             ApplyPanelVisibility();
             if (playSound) Game1.playSound(_panelOpen ? "bigSelect" : "bigDeSelect");
 

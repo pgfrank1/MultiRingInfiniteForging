@@ -16,7 +16,7 @@
   "config.AddCombinedDuplicateRingCap.name": "Add Combined Duplicate Ring Cap",
   "config.AddCombinedDuplicateRingCap.description": "Prevent the same ring from being combined into the same Combined Ring multiple times.  Only takes effect when 'Infinite Ring Combining' is enabled.",
   "config.WeaponForgingCap.name": "Weapon Forging Cap",
-  "config.WeaponForgingCap.description": "Maximum number of gem forges per weapon (-1 = unlimited).",
+  "config.WeaponForgingCap.description": "Maximum number of gem forges per weapon. 'Unlimited' removes the cap entirely; 'None (0)' prevents all forging.",
   "config.RemoveDiamondForgesCap.name": "Remove Diamond Forges Cap",
   "config.RemoveDiamondForgesCap.description": "Remove the cap on how many diamond forges can be used (lets you keep using diamond forges beyond level 3).",
   "config.multipleEnchantments.name": "Multiple Enchantments",

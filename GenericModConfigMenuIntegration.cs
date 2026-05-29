@@ -1,11 +1,5 @@
 ﻿using System;
-using System.Collections.Generic;
-using Microsoft.Xna.Framework;
-using Microsoft.Xna.Framework.Graphics;
 using StardewModdingAPI;
-using StardewModdingAPI.Utilities;
-using StardewValley;
-using StardewValley.Menus;
 
 namespace MultiRingInfiniteForging
 {
@@ -71,16 +65,31 @@ namespace MultiRingInfiniteForging
                 tooltip: () => ModEntry.T("config.AddCombinedDuplicateRingCap.description")
             );
 
-            api.AddNumberOption(
+            string[] forgingPresets = { "-1", "0", "3", "6", "10", "15", "30", "60", "100", "250", "500", "999" };
+            api.AddTextOption(
                 mod: mod.ModManifest,
-                getValue: () => config.WeaponForgingCap,
-                setValue: v => config.WeaponForgingCap = v,
+                getValue: () =>
+                {
+                    int v = config.WeaponForgingCap;
+                    foreach (var p in forgingPresets)
+                        if (int.TryParse(p, out int n) && n == v)
+                            return p;
+                    return v.ToString();
+                },
+                setValue: v =>
+                {
+                    if (int.TryParse(v, out int n))
+                        config.WeaponForgingCap = n;
+                },
                 name: () => ModEntry.T("config.WeaponForgingCap.name"),
                 tooltip: () => ModEntry.T("config.WeaponForgingCap.description"),
-                min: -1,
-                max: 999,
-                interval: 1,
-                formatValue: v => v == -1 ? "Unlimited" : v.ToString()
+                allowedValues: forgingPresets,
+                formatAllowedValue: v => v switch
+                {
+                    "-1" => "Unlimited",
+                    "0" => "None (0)",
+                    _ => v
+                }
             );
             
             api.AddBoolOption(

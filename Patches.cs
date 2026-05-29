@@ -13,6 +13,13 @@ namespace MultiRingInfiniteForging
     public static class Patches
     {
         private static IMonitor Log = null!;
+        private static readonly HashSet<string> _testLogOnce = new();
+
+        private static void TestLogOnce(string message)
+        {
+            if (_testLogOnce.Add(message))
+                ModEntry.DiagVerbose("[Test] " + message);
+        }
 
         public static void ApplyAll(Harmony harmony, IMonitor monitor)
         {
@@ -260,8 +267,9 @@ namespace MultiRingInfiniteForging
             }
         }
 
-        
-        // ----- patches -----
+        // ============================================================
+        //  Ring effect patches
+        // ============================================================
 
         public static void IsWearingRing_Postfix(Farmer __instance, string itemId, ref bool __result)
         {
@@ -271,6 +279,7 @@ namespace MultiRingInfiniteForging
                 if (ring == null) continue;
                 if (ring.GetsEffectOfRing(itemId))
                 {
+                    TestLogOnce("IsWearingRing: extra slot match for " + itemId + " via " + ring.DisplayName);
                     __result = true;
                     return;
                 }
@@ -308,6 +317,10 @@ namespace MultiRingInfiniteForging
             }
         }
 
+        // ============================================================
+        //  Forge menu patches (IsValidCraft, HighlightItems)
+        // ============================================================
+
         public static void Forge_IsValidCraft_Postfix(Item left_item, Item right_item, ref bool __result)
         {
             // Override 1: Infinite ring combining.  Allow ring+ring even when vanilla
@@ -323,9 +336,11 @@ namespace MultiRingInfiniteForging
                 if (ModEntry.Instance.Config.AddCombinedDuplicateRingCap
                     && WouldCreateDuplicateRing(leftRing, rightRing))
                 {
+                    TestLogOnce("IsValidCraft: infinite combining BLOCKED (duplicate cap)");
                     __result = false;
                     return;
                 }
+                TestLogOnce("IsValidCraft: infinite combining ALLOWED: " + leftRing.Name + " + " + rightRing.Name);
                 __result = true;
                 return;
             }
@@ -339,6 +354,7 @@ namespace MultiRingInfiniteForging
                 && right_item != null
                 && !ForgeMenuPatches.CanRightItemEnchantTool(leftToolDemote, right_item))
             {
+                TestLogOnce("IsValidCraft: demoted to false (no-op craft) for " + leftToolDemote.Name + " + " + right_item.Name);
                 __result = false;
                 return;
             }
@@ -354,170 +370,190 @@ namespace MultiRingInfiniteForging
                 && right_item != null
                 && ForgeMenuPatches.CanRightItemEnchantTool(leftToolPromote, right_item))
             {
+                TestLogOnce("IsValidCraft: promoted to true (re-roll) for " + leftToolPromote.Name + " + " + right_item.Name);
                 __result = true;
             }
         }
 
-                /// <summary>Diagnostic + functional postfix on ForgeMenu.HighlightItems.
-                /// Logs each call so we can verify the patch is active, then (when the left
-                /// ingredient is a Ring) tightens the result so only Rings and Prismatic
-                /// Shards are highlighted.</summary>
-            public static void Forge_HighlightItems_Postfix(ForgeMenu __instance, Item i, ref bool __result)
-            {
-                if (i == null) return;
+        /// <summary>Diagnostic + functional postfix on ForgeMenu.HighlightItems.
+        /// Logs each call so we can verify the patch is active, then (when the left
+        /// ingredient is a Ring) tightens the result so only Rings and Prismatic
+        /// Shards are highlighted.</summary>
+        public static void Forge_HighlightItems_Postfix(ForgeMenu __instance, Item i, ref bool __result)
+        {
+            if (i == null) return;
 
-                // Scythes can't be forged or enchanted — always dim them.
-                if (i is MeleeWeapon scytheCheck && !IsScytheForgingAllowed(scytheCheck))
+            // Scythes can't be forged or enchanted — always dim them.
+            if (i is MeleeWeapon scytheCheck && !IsScytheForgingAllowed(scytheCheck))
+            {
+                TestLogOnce("HighlightItems: scythe blocked (" + scytheCheck.Name + ")");
+                __result = false;
+                return;
+            }
+
+            Item? leftItem  = __instance.leftIngredientSpot.item;
+            Item? rightItem = __instance.rightIngredientSpot.item;
+
+            // Case 1: Ring in left slot.  Highlight only rings that would form
+            // a valid ring+ring combine with the left ring.  Without InfiniteCombining,
+            // vanilla restricts to "uncombined + uncombined of different IDs"; with
+            // InfiniteCombining our Forge_IsValidCraft_Postfix override allows any
+            // ring+ring.  Either way, defer to IsValidCraft for the decision.
+            if (leftItem is Ring)
+            {
+                if (i is not Ring)
                 {
+                    TestLogOnce("HighlightItems: ring in left slot, non-ring " + i.Name + " dimmed");
                     __result = false;
                     return;
                 }
 
-                Item? leftItem  = __instance.leftIngredientSpot.item;
-                Item? rightItem = __instance.rightIngredientSpot.item;
-
-                // Case 1: Ring in left slot.  Highlight only rings that would form
-                // a valid ring+ring combine with the left ring.  Without InfiniteCombining,
-                // vanilla restricts to "uncombined + uncombined of different IDs"; with
-                // InfiniteCombining our Forge_IsValidCraft_Postfix override allows any
-                // ring+ring.  Either way, defer to IsValidCraft for the decision.
-                if (leftItem is Ring)
+                bool valid = false;
+                try
                 {
-                    if (i is not Ring)
+                    var isValidCraft = AccessTools.Method(typeof(ForgeMenu), "IsValidCraft");
+                    if (isValidCraft != null)
                     {
-                        __result = false;
-                        return;
+                        var ret = isValidCraft.Invoke(__instance, new object?[] { leftItem, i });
+                        if (ret is bool b) valid = b;
                     }
+                }
+                catch { /* leave valid = false */ }
 
-                    bool valid = false;
-                    try
-                    {
-                        var isValidCraft = AccessTools.Method(typeof(ForgeMenu), "IsValidCraft");
-                        if (isValidCraft != null)
-                        {
-                            var ret = isValidCraft.Invoke(__instance, new object?[] { leftItem, i });
-                            if (ret is bool b) valid = b;
-                        }
-                    }
-                    catch { /* leave valid = false */ }
-
-                    if (valid
-                        && ModEntry.Instance.Config.AddCombinedDuplicateRingCap
-                        && ModEntry.Instance.Config.InfiniteCombining
-                        && WouldCreateDuplicateRing((Ring)leftItem, (Ring)i))
-                    {
-                        valid = false;
-                    }
-
-                    __result = valid;
-                    return;
+                if (valid
+                    && ModEntry.Instance.Config.AddCombinedDuplicateRingCap
+                    && ModEntry.Instance.Config.InfiniteCombining
+                    && WouldCreateDuplicateRing((Ring)leftItem, (Ring)i))
+                {
+                    TestLogOnce("HighlightItems: ring " + i.Name + " dimmed by duplicate cap");
+                    valid = false;
                 }
 
-                // Case 2: Weapon/Slingshot/Tool in left slot.
-                if (leftItem is MeleeWeapon || leftItem is Slingshot
-                                            || (leftItem is Tool t && t.UpgradeLevel > 0))
+                TestLogOnce("HighlightItems: ring in left slot, " + i.Name + " → " + (valid ? "highlighted" : "dimmed"));
+                __result = valid;
+                return;
+            }
+
+            // Case 2: Weapon/Slingshot/Tool in left slot.
+            if (leftItem is MeleeWeapon || leftItem is Slingshot
+                                        || (leftItem is Tool t && t.UpgradeLevel > 0))
+            {
+                bool valid = false;
+                try
                 {
-                    bool valid = false;
-                    try
+                    var isValidCraft = AccessTools.Method(typeof(ForgeMenu), "IsValidCraft");
+                    if (isValidCraft != null)
                     {
-                        var isValidCraft = AccessTools.Method(typeof(ForgeMenu), "IsValidCraft");
-                        if (isValidCraft != null)
-                        {
-                            var ret = isValidCraft.Invoke(__instance, new object?[] { leftItem, i });
-                            if (ret is bool b) valid = b;
-                        }
+                        var ret = isValidCraft.Invoke(__instance, new object?[] { leftItem, i });
+                        if (ret is bool b) valid = b;
                     }
-                    catch { /* leave valid = false */ }
+                }
+                catch { /* leave valid = false */ }
 
-                    // Demote: dim items that would produce a no-op craft (e.g. Diamond
-                    // on a tool that already has all 6 gem enchantments).
-                    if (valid && leftItem is Tool leftToolDemote
-                              && !ForgeMenuPatches.CanRightItemEnchantTool(leftToolDemote, i))
-                    {
-                        valid = false;
-                    }
-
-                    // Promote: highlight items that vanilla rejects but our mod accepts.
-                    // Specifically: with MultipleEnchantments=false, vanilla refuses a
-                    // Prismatic Shard on a fully-enchanted tool because
-                    // GetEnchantmentFromItem returns null (the available pool is empty
-                    // after filtering applied types).  But vanilla's AddEnchantment will
-                    // CLEAR the existing tool enchantment before applying the new one,
-                    // so the craft does produce a result — CanRightItemEnchantTool
-                    // simulates that.  If our gate says yes, override vanilla's "no".
-                    if (!valid && leftItem is Tool leftToolPromote
-                               && ForgeMenuPatches.CanRightItemEnchantTool(leftToolPromote, i))
-                    {
-                        valid = true;
-                    }
-
-                    __result = valid;
-                    return;
+                // Demote: dim items that would produce a no-op craft (e.g. Diamond
+                // on a tool that already has all 6 gem enchantments).
+                if (valid && leftItem is Tool leftToolDemote
+                          && !ForgeMenuPatches.CanRightItemEnchantTool(leftToolDemote, i))
+                {
+                    TestLogOnce("HighlightItems: tool in left slot, " + i.Name + " dimmed (no-op demote)");
+                    valid = false;
                 }
 
-                // Case 3: Left slot empty, but RIGHT slot has an item.  Vanilla doesn't
-                // dim the inventory in this state — but we want to.  Highlight items that
-                // would form a valid craft when placed in the LEFT slot against the
-                // existing right ingredient.
-                if (leftItem == null && rightItem != null)
+                // Promote: highlight items that vanilla rejects but our mod accepts.
+                // Specifically: with MultipleEnchantments=false, vanilla refuses a
+                // Prismatic Shard on a fully-enchanted tool because
+                // GetEnchantmentFromItem returns null (the available pool is empty
+                // after filtering applied types).  But vanilla's AddEnchantment will
+                // CLEAR the existing tool enchantment before applying the new one,
+                // so the craft does produce a result — CanRightItemEnchantTool
+                // simulates that.  If our gate says yes, override vanilla's "no".
+                if (!valid && leftItem is Tool leftToolPromote
+                           && ForgeMenuPatches.CanRightItemEnchantTool(leftToolPromote, i))
                 {
-                    bool valid = false;
-                    try
-                    {
-                        var isValidCraft = AccessTools.Method(typeof(ForgeMenu), "IsValidCraft");
-                        if (isValidCraft != null)
-                        {
-                            var ret = isValidCraft.Invoke(__instance, new object?[] { i, rightItem });
-                            if (ret is bool b) valid = b;
-                        }
-                    }
-                    catch { /* leave valid = false */ }
-
-                    // Demote: no-op craft.
-                    if (valid && i is Tool prospectiveLeftToolDemote
-                              && !ForgeMenuPatches.CanRightItemEnchantTool(prospectiveLeftToolDemote, rightItem))
-                    {
-                        valid = false;
-                    }
-
-                    // Promote: re-roll case (see Case 2 comment).
-                    if (!valid && i is Tool prospectiveLeftToolPromote
-                               && ForgeMenuPatches.CanRightItemEnchantTool(prospectiveLeftToolPromote, rightItem))
-                    {
-                        valid = true;
-                    }
-
-                    __result = valid;
-                    return;
+                    TestLogOnce("HighlightItems: tool in left slot, " + i.Name + " highlighted (re-roll promote)");
+                    valid = true;
                 }
 
-                // Case 4: Both forge slots empty.  Vanilla refuses to highlight a Tool whose
-                // GetAvailableEnchantmentsForItem list is empty (i.e. all secondary
-                // enchantments are applied) — that means the user can't even PICK UP
-                // a fully-enchanted tool from inventory to forge more gems onto it.
-                // Override: a tool/weapon/ring is always pickable when the forge is empty;
-                // the right-slot drop logic handles refusing no-op crafts later.
-                if (leftItem == null && rightItem == null && !__result)
+                TestLogOnce("HighlightItems: tool in left slot, " + i.Name + " → " + (valid ? "highlighted" : "dimmed"));
+                __result = valid;
+                return;
+            }
+
+            // Case 3: Left slot empty, but RIGHT slot has an item.  Vanilla doesn't
+            // dim the inventory in this state — but we want to.  Highlight items that
+            // would form a valid craft when placed in the LEFT slot against the
+            // existing right ingredient.
+            if (leftItem == null && rightItem != null)
+            {
+                bool valid = false;
+                try
                 {
-                    if (i is Ring
-                        || i is MeleeWeapon
-                        || i is Slingshot
-                        || (i is Tool tool && tool.UpgradeLevel > 0))
+                    var isValidCraft = AccessTools.Method(typeof(ForgeMenu), "IsValidCraft");
+                    if (isValidCraft != null)
                     {
-                        __result = true;
+                        var ret = isValidCraft.Invoke(__instance, new object?[] { i, rightItem });
+                        if (ret is bool b) valid = b;
                     }
+                }
+                catch { /* leave valid = false */ }
+
+                // Demote: no-op craft.
+                if (valid && i is Tool prospectiveLeftToolDemote
+                          && !ForgeMenuPatches.CanRightItemEnchantTool(prospectiveLeftToolDemote, rightItem))
+                {
+                    TestLogOnce("HighlightItems: right slot occupied, " + i.Name + " dimmed (no-op demote)");
+                    valid = false;
+                }
+
+                // Promote: re-roll case (see Case 2 comment).
+                if (!valid && i is Tool prospectiveLeftToolPromote
+                           && ForgeMenuPatches.CanRightItemEnchantTool(prospectiveLeftToolPromote, rightItem))
+                {
+                    TestLogOnce("HighlightItems: right slot occupied, " + i.Name + " highlighted (re-roll promote)");
+                    valid = true;
+                }
+
+                TestLogOnce("HighlightItems: right slot occupied, " + i.Name + " → " + (valid ? "highlighted" : "dimmed"));
+                __result = valid;
+                return;
+            }
+
+            // Case 4: Both forge slots empty.  Vanilla refuses to highlight a Tool whose
+            // GetAvailableEnchantmentsForItem list is empty (i.e. all secondary
+            // enchantments are applied) — that means the user can't even PICK UP
+            // a fully-enchanted tool from inventory to forge more gems onto it.
+            // Override: a tool/weapon/ring is always pickable when the forge is empty;
+            // the right-slot drop logic handles refusing no-op crafts later.
+            if (leftItem == null && rightItem == null && !__result)
+            {
+                if (i is Ring
+                    || i is MeleeWeapon
+                    || i is Slingshot
+                    || (i is Tool tool && tool.UpgradeLevel > 0))
+                {
+                    TestLogOnce("HighlightItems: both empty, re-enabled " + i.Name);
+                    __result = true;
                 }
             }
+        }
         
-        /// <summary>Stop MeleeWeapon.AddEnchantment from removing the existing
-        /// BaseWeaponEnchantment instances before adding the new one.  We replicate
-        /// vanilla's call to base.AddEnchantment ourselves and skip the original.</summary>
+        // ============================================================
+        //  Weapon / tool forge patches (GetMaxForges, AddEnchantment,
+        //  Diamond/Prismatic/Dragon Tooth forge intercepts)
+        // ============================================================
+
         public static void MeleeWeapon_GetMaxForges_Postfix(ref int __result)
         {
             if (ModEntry.Instance.Config.WeaponForgingCap == -1)
+            {
+                TestLogOnce("GetMaxForges: unlimited (int.MaxValue)");
                 __result = int.MaxValue;
+            }
             else if (ModEntry.Instance.Config.WeaponForgingCap >= 0)
+            {
+                TestLogOnce("GetMaxForges: capped at " + ModEntry.Instance.Config.WeaponForgingCap);
                 __result = ModEntry.Instance.Config.WeaponForgingCap;
+            }
         }
 
         /// <summary>Stop Tool.AddEnchantment from removing the existing enchantments of
@@ -529,14 +565,19 @@ namespace MultiRingInfiniteForging
             ref bool __result)
         {
             if (!ModEntry.Instance.Config.MultipleEnchantments)
+            {
+                ModEntry.DiagVerbose("[Test] AddEnchantment: MultipleEnchantments=false, running vanilla");
                 return true; // run vanilla as normal
+            }
 
             if (enchantment == null)
             {
+                ModEntry.DiagVerbose("[Test] AddEnchantment: null enchantment, returning false");
                 __result = false;
                 return false;
             }
 
+            ModEntry.DiagVerbose("[Test] AddEnchantment: adding " + enchantment.GetType().Name + " to " + __instance.Name + " (MultipleEnchantments mode)");
             __instance.enchantments.Add(enchantment);
             enchantment.ApplyTo(__instance, Game1.player);
 
@@ -596,6 +637,7 @@ namespace MultiRingInfiniteForging
 
             if (validForges.Count == 0 && ModEntry.Instance.Config.RemoveDiamondForgesCap)
             {
+                ModEntry.DiagVerbose("[Test] Diamond forge: RemoveDiamondForgesCap=true, re-enabling all 6 types");
                 validForges = new List<int> { 0, 1, 2, 3, 4, 5 };
             }
             
@@ -604,6 +646,7 @@ namespace MultiRingInfiniteForging
             const int diamondCapPerCraft = 3;
             
             int forgesLeft = System.Math.Min(diamondCapPerCraft, validForges.Count);
+            ModEntry.DiagVerbose("[Test] Diamond forge: " + forgesLeft + " forges available on " + __instance.Name);
 
             for (int i = 0; i < forgesLeft; i++)
             {
@@ -618,6 +661,7 @@ namespace MultiRingInfiniteForging
                     4 => new StardewValley.Enchantments.TopazEnchantment(),
                     _ => new StardewValley.Enchantments.JadeEnchantment(),
                 };
+                ModEntry.DiagVerbose("[Test] Diamond forge: applying " + ench.GetType().Name + " (choice=" + choice + ")");
                 __instance.AddEnchantment(ench);
                 validForges.RemoveAt(choice);
             }
@@ -638,7 +682,10 @@ namespace MultiRingInfiniteForging
             Tool __instance, Item item)
         {
             if (ModEntry.Instance.Config.MultipleEnchantments)
+            {
+                ModEntry.DiagVerbose("[Test] Prismatic reroll: MultipleEnchantments=true, passing through");
                 return true; // stacking mode — pass through
+            }
             if (item?.QualifiedItemId != "(O)74")
                 return true; // not a Prismatic Shard
 
@@ -678,12 +725,18 @@ namespace MultiRingInfiniteForging
             if (__instance is not MeleeWeapon weapon)
                 return true;
             if (weapon.isScythe())
+            {
+                ModEntry.DiagVerbose("[Test] Dragon Tooth: scythe blocked");
                 return true;
+            }
 
             // For non-Galaxy weapons below level 15, vanilla's existing path works
             // correctly — leave it alone.
             if (!weapon.Name.Contains("Galaxy") && weapon.getItemLevel() < 15)
+            {
+                ModEntry.DiagVerbose("[Test] Dragon Tooth: non-Galaxy below level 15, passing to vanilla");
                 return true;
+            }
 
             // Mod extension: Galaxy/Infinity weapons.  Replicate vanilla's behaviour
             // here since vanilla's CanForge refuses.
@@ -707,6 +760,10 @@ namespace MultiRingInfiniteForging
             return false; // skip vanilla
         }
         
+        // ============================================================
+        //  Helpers
+        // ============================================================
+
         /// <summary>True if the given weapon can be placed in a forge slot.  Non-scythes
         /// are always allowed; scythes require an optional scythe-forging mod.</summary>
         public static bool IsScytheForgingAllowed(MeleeWeapon weapon) =>
@@ -722,7 +779,10 @@ namespace MultiRingInfiniteForging
             foreach (var id in EnumerateRingIds(b))
             {
                 if (!seen.Add(id))
+                {
+                    TestLogOnce("WouldCreateDuplicateRing: duplicate found " + id);
                     return true;  // already present on the left side OR duplicated within the right side itself
+                }
             }
             return false;
         }

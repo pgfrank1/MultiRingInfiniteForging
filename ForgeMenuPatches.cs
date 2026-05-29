@@ -19,6 +19,14 @@ namespace MultiRingInfiniteForging
 
         private static IMonitor Log = null!;
 
+        private static readonly HashSet<string> _testLogOnce = new();
+
+        private static void TestLogOnce(string message)
+        {
+            if (_testLogOnce.Add(message))
+                ModEntry.DiagVerbose("[Test] " + message);
+        }
+
         private static readonly System.Reflection.FieldInfo? HeldItemField =
             AccessTools.Field(typeof(MenuWithInventory), "_heldItem");
 
@@ -85,13 +93,13 @@ namespace MultiRingInfiniteForging
                 prefix: new HarmonyMethod(typeof(ForgeMenuPatches), nameof(LeftClick_Prefix))
             );
 
-            // NEW: postfix to see what vanilla left in _heldItem after handling the click.
+            // Postfix to see what vanilla left in _heldItem after handling the click.
             harmony.Patch(
                 original: AccessTools.Method(typeof(ForgeMenu), nameof(ForgeMenu.receiveLeftClick)),
                 postfix: new HarmonyMethod(typeof(ForgeMenuPatches), nameof(LeftClick_Postfix))
             );
 
-            // NEW: postfix on update() to detect when vanilla finishes the craft and assigns _heldItem.
+            // Postfix on update() to detect when vanilla finishes the craft and assigns _heldItem.
             harmony.Patch(
                 original: AccessTools.Method(typeof(ForgeMenu), nameof(ForgeMenu.update),
                     new[] { typeof(Microsoft.Xna.Framework.GameTime) }),
@@ -269,8 +277,10 @@ namespace MultiRingInfiniteForging
         //  Inject into equipmentIcons
         // ============================================================
 
+        [HarmonyPriority(Priority.Last)]
         public static void Ctor_Postfix(ForgeMenu __instance)
         {
+            _testLogOnce.Clear();
             _panelOpen = false;
             RebuildSlots(__instance);
 
@@ -284,6 +294,7 @@ namespace MultiRingInfiniteForging
                 rightRing.downNeighborID = ToggleButton.myID;
 
             __instance.populateClickableComponentList();
+            ModEntry.DiagVerbose("[Test] Forge panel initialized with " + Slots.Count + " slots");
 
             // One-shot diagnostic: dump equipmentIcons.
             ModEntry.DiagVerbose("[Forge] equipmentIcons dump:");
@@ -340,6 +351,8 @@ namespace MultiRingInfiniteForging
                     bool nonRingInSlot =
                         (__instance.leftIngredientSpot.item  != null && __instance.leftIngredientSpot.item  is not Ring) ||
                         (__instance.rightIngredientSpot.item != null && __instance.rightIngredientSpot.item is not Ring);
+                    if (nonRingInSlot)
+                        TestLogOnce("Forge draw: panel slots dimmed by non-ring in forge");
 
                     var forgeLeftRing  = __instance.leftIngredientSpot.item  as Ring;
                     var forgeRightRing = __instance.rightIngredientSpot.item as Ring;
@@ -366,9 +379,15 @@ namespace MultiRingInfiniteForging
                             if (!blocked && !ModEntry.Instance.Config.InfiniteCombining)
                             {
                                 if (forgeLeftRing != null && !IsValidCraft(__instance, forgeLeftRing, ring))
+                                {
+                                    TestLogOnce("Forge draw: panel slot dimmed by invalid craft (left)");
                                     blocked = true;
+                                }
                                 else if (forgeRightRing != null && forgeLeftRing == null && !IsValidCraft(__instance, ring, forgeRightRing))
+                                {
+                                    TestLogOnce("Forge draw: panel slot dimmed by invalid craft (right)");
                                     blocked = true;
+                                }
                             }
 
                             if (!blocked
@@ -377,11 +396,19 @@ namespace MultiRingInfiniteForging
                             {
                                 // Dim if placing this panel ring into either forge slot would create a duplicate.
                                 if (forgeLeftRing != null && Patches.WouldCreateDuplicateRing(forgeLeftRing, ring))
+                                {
+                                    TestLogOnce("Forge draw: panel slot dimmed by duplicate cap (left)");
                                     blocked = true;
+                                }
                                 else if (forgeRightRing != null && Patches.WouldCreateDuplicateRing(forgeRightRing, ring))
+                                {
+                                    TestLogOnce("Forge draw: panel slot dimmed by duplicate cap (right)");
                                     blocked = true;
+                                }
 
                             }
+
+                            TestLogOnce($"Forge draw: panel slot {idx} {ring.Name} {(blocked ? "dimmed" : "allowed")}");
 
                             if (blocked)
                             {
@@ -401,51 +428,7 @@ namespace MultiRingInfiniteForging
                     }
                 }
             
-                // 4.5) CombinedRing slot-glow.
-                // Vanilla's ForgeMenu.draw explicitly excludes CombinedRing from the
-                // "this item could go in a slot" highlight (vanilla can't combine already-
-                // combined rings).  With InfiniteCombining we DO support that — so draw the
-                // missing glow ourselves.
-                //
-                // Because vanilla has already drawn the hover tooltip by this point, we
-                // must re-draw the tooltip on top of our glow afterwards, or the glow
-                // would visually obscure the tooltip text.
-                bool combinedRingGlowDrawn = false;
-                if (ModEntry.Instance.Config.InfiniteCombining)
-                {
-                    Item? highlightItem = Game1.player.CursorSlotItem
-                                          ?? GetHeldItem(__instance)
-                                          ?? __instance.hoveredItem;
-                    
-                    var leftRing  = __instance.leftIngredientSpot.item as Ring;
-                    var rightRing = __instance.rightIngredientSpot.item as Ring;
-
-                    if (highlightItem is CombinedRing
-                        && __instance.leftIngredientSpot.item is null or Ring
-                        && __instance.rightIngredientSpot.item is null or Ring
-                        && !__instance.IsBusy()
-                        && ModEntry.Instance.Config.AddCombinedDuplicateRingCap
-                        && leftRing != null && rightRing != null
-                        && Patches.WouldCreateDuplicateRing(leftRing, rightRing)
-                        )
-                    {
-                        if (__instance.leftIngredientSpot.item == null)
-                            __instance.leftIngredientSpot.draw(b, Color.White, 0.87f);
-                        if (__instance.rightIngredientSpot.item == null)
-                            __instance.rightIngredientSpot.draw(b, Color.White, 0.87f);
-                        combinedRingGlowDrawn = true;
-                    }
-                }
-
-                // 4.6) If we drew a glow, re-draw the hovered-item tooltip on top so the
-                // ring's info popup isn't visually obscured by our glow sprites.
-                if (combinedRingGlowDrawn && __instance.hoveredItem != null)
-                {
-                    IClickableMenu.drawToolTip(b,
-                        __instance.hoveredItem.getDescription(),
-                        __instance.hoveredItem.DisplayName,
-                        __instance.hoveredItem);
-                }
+                DrawCombinedRingGlow(__instance, b);
             
             // 5) Hover tooltip.
             if (!string.IsNullOrEmpty(_hoverText))
@@ -474,6 +457,46 @@ namespace MultiRingInfiniteForging
                 if (s.bounds.Bottom > maxY) maxY = s.bounds.Bottom;
             }
             return new Rectangle(minX, minY, maxX - minX, maxY - minY);
+        }
+
+        /// <summary>Vanilla's ForgeMenu.draw explicitly excludes CombinedRing from the
+        /// "this item could go in a slot" highlight (vanilla can't combine already-
+        /// combined rings).  With InfiniteCombining we DO support that — so draw the
+        /// missing glow ourselves.
+        /// Also re-draws the hovered-item tooltip on top since vanilla's tooltip was
+        /// drawn before the glow.</summary>
+        private static void DrawCombinedRingGlow(ForgeMenu menu, SpriteBatch b)
+        {
+            if (!ModEntry.Instance.Config.InfiniteCombining) return;
+
+            Item? highlightItem = Game1.player.CursorSlotItem
+                                  ?? GetHeldItem(menu)
+                                  ?? menu.hoveredItem;
+
+            var leftRing  = menu.leftIngredientSpot.item as Ring;
+            var rightRing = menu.rightIngredientSpot.item as Ring;
+
+            if (highlightItem is CombinedRing
+                && menu.leftIngredientSpot.item is null or Ring
+                && menu.rightIngredientSpot.item is null or Ring
+                && !menu.IsBusy()
+                && ModEntry.Instance.Config.AddCombinedDuplicateRingCap
+                && leftRing != null && rightRing != null
+                && Patches.WouldCreateDuplicateRing(leftRing, rightRing))
+            {
+                if (menu.leftIngredientSpot.item == null)
+                    menu.leftIngredientSpot.draw(b, Color.White, 0.87f);
+                if (menu.rightIngredientSpot.item == null)
+                    menu.rightIngredientSpot.draw(b, Color.White, 0.87f);
+
+                if (menu.hoveredItem != null)
+                {
+                    IClickableMenu.drawToolTip(b,
+                        menu.hoveredItem.getDescription(),
+                        menu.hoveredItem.DisplayName,
+                        menu.hoveredItem);
+                }
+            }
         }
 
         // ============================================================
@@ -587,19 +610,31 @@ namespace MultiRingInfiniteForging
 
                             if (ringInSlot && existing is not Ring)
                             {
+                                ModEntry.DiagVerbose("[Test] Forge cursor swap blocked: non-ring " + existing.Name + " → ring in forge slot");
                                 ModEntry.DiagVerbose($"[Forge] Cursor swap refused: ring in forge slot, refusing to lift non-ring ({existing.Name}) onto cursor");
                                 return false;
                             }
                             if (nonRingInSlot && existing is Ring)
                             {
+                                ModEntry.DiagVerbose("[Test] Forge cursor swap blocked: ring " + existing.Name + " → non-ring in forge slot");
                                 ModEntry.DiagVerbose($"[Forge] Cursor swap refused: non-ring in forge slot, refusing to lift ring ({existing.Name}) onto cursor");
                                 return false;
                             }
 
-                            // Guard 4: duplicate cap — refuse if the ring being lifted would
+                            // Guard 4: forge context — refuse if the ring being lifted would
+                            // be dimmed by the current forge state.
+                            if (existing is Ring existingCtxRing && !IsRingAllowedInForgeContext(existingCtxRing, __instance))
+                            {
+                                ModEntry.DiagVerbose("[Test] Forge cursor swap blocked: " + existingCtxRing.Name + " dimmed");
+                                ModEntry.DiagVerbose($"[Forge] Cursor swap refused: {existingCtxRing.Name} dimmed by forge context");
+                                return false;
+                            }
+
+                            // Guard 5: duplicate cap — refuse if the ring being lifted would
                             // be blocked by AddCombinedDuplicateRingCap.
                             if (existing is Ring existingSwapRing && IsRingBlockedByDuplicateCap(existingSwapRing, __instance))
                             {
+                                ModEntry.DiagVerbose("[Test] Forge cursor swap blocked: " + existingSwapRing.Name + " duplicate cap");
                                 ModEntry.DiagVerbose($"[Forge] Cursor swap refused: {existingSwapRing.Name} blocked by duplicate cap");
                                 return false;
                             }
@@ -696,11 +731,13 @@ namespace MultiRingInfiniteForging
 
             if (carryingNonRing && wouldGrabRing)
             {
+                ModEntry.DiagVerbose("[Test] Forge blocked: carrying non-ring, refusing ring pick-up");
                 ModEntry.DiagVerbose($"[Forge] Blocked: carrying non-ring (cursor={cursorItem?.Name ?? "null"}, held={heldItem?.Name ?? "null"}); refusing to pick up another ring");
                 return false;
             }
             if (carryingRing && wouldGrabNonRing)
             {
+                ModEntry.DiagVerbose("[Test] Forge blocked: carrying ring, refusing non-ring pick-up");
                 ModEntry.DiagVerbose($"[Forge] Blocked: carrying ring (cursor={cursorItem?.Name ?? "null"}, held={heldItem?.Name ?? "null"}); refusing to pick up a non-ring");
                 return false;
             }
@@ -709,6 +746,7 @@ namespace MultiRingInfiniteForging
             // "greyed out" — block all ring pickups.
             if (nonRingInForgeSlot && wouldGrabRing)
             {
+                ModEntry.DiagVerbose("[Test] Forge blocked: non-ring in forge slot, rings greyed out");
                 ModEntry.DiagVerbose($"[Forge] Blocked: non-ring in forge slot (left={__instance.leftIngredientSpot.item?.Name ?? "null"}, right={__instance.rightIngredientSpot.item?.Name ?? "null"}); rings are greyed out");
                 return false;
             }
@@ -718,6 +756,7 @@ namespace MultiRingInfiniteForging
             // create an invalid ring+sword combination in the forge.
             if (ringInForgeSlot && wouldGrabNonRing)
             {
+                ModEntry.DiagVerbose("[Test] Forge blocked: ring in forge slot, non-rings greyed out");
                 ModEntry.DiagVerbose($"[Forge] Blocked: ring in forge slot (left={__instance.leftIngredientSpot.item?.Name ?? "null"}, right={__instance.rightIngredientSpot.item?.Name ?? "null"}); non-rings are greyed out");
                 return false;
             }
@@ -744,6 +783,7 @@ namespace MultiRingInfiniteForging
 
                     if (!acceptsInLeft)
                     {
+                        ModEntry.DiagVerbose("[Test] Forge drop blocked: " + carriedAny.Name + " not accepted in left slot");
                         ModEntry.DiagVerbose($"[Forge]   -> {carriedAny.Name} is not accepted in forge.left; blocking");
                         return false;
                     }
@@ -757,6 +797,7 @@ namespace MultiRingInfiniteForging
                             Item? rightItem = __instance.rightIngredientSpot.item;
                             if (rightItem != null && !IsValidCraft(__instance, r, rightItem))
                             {
+                                ModEntry.DiagVerbose("[Test] Forge drop blocked: ring " + r.Name + " invalid with right=" + rightItem.Name);
                                 ModEntry.DiagVerbose($"[Forge]   -> ring+right={rightItem.Name} would be invalid; refusing");
                                 return false;
                             }
@@ -766,12 +807,14 @@ namespace MultiRingInfiniteForging
                                 && (rightItem.QualifiedItemId == "(O)74"
                                     || rightItem.QualifiedItemId == "(O)852"))
                             {
+                                ModEntry.DiagVerbose("[Test] Forge drop blocked: ring + " + rightItem.Name + " not a valid craft");
                                 ModEntry.DiagVerbose($"[Forge]   -> ring+{rightItem.Name} is not a valid craft; refusing");
                                 return false;
                             }
                         }
                         __instance.leftIngredientSpot.item = carriedAny;
                         Game1.player.CursorSlotItem = null;
+                        ModEntry.DiagVerbose("[Test] Forge drop accepted: " + carriedAny.Name + " → left slot");
                         ModEntry.DiagVerbose($"[Forge]   -> placed {carriedAny.Name} in forge.left");
                         if (playSound) Game1.playSound("stoneStep");
                         return false;
@@ -780,6 +823,7 @@ namespace MultiRingInfiniteForging
                     // Slot is occupied: swap with the cursor.
                     __instance.leftIngredientSpot.item = carriedAny;
                     Game1.player.CursorSlotItem = leftExisting;
+                    ModEntry.DiagVerbose("[Test] Forge swap: " + carriedAny.Name + " ↔ " + leftExisting.Name + " in left slot");
                     ModEntry.DiagVerbose($"[Forge]   -> swapped forge.left: was {leftExisting.Name}, now {carriedAny.Name}");
                     if (playSound) Game1.playSound("stoneStep");
                     return false;
@@ -797,6 +841,7 @@ namespace MultiRingInfiniteForging
                         && (carriedAny.QualifiedItemId == "(O)74"
                             || carriedAny.QualifiedItemId == "(O)852"))
                     {
+                        ModEntry.DiagVerbose("[Test] Forge drop blocked: " + carriedAny.Name + " doesn't combine with ring");
                         ModEntry.DiagVerbose($"[Forge]   -> {carriedAny.Name} doesn't combine with a ring; refusing");
                         return false;
                     }
@@ -821,6 +866,7 @@ namespace MultiRingInfiniteForging
                             && leftItem is Tool leftTool
                             && !CanRightItemEnchantTool(leftTool, carriedAny))
                         {
+                            ModEntry.DiagVerbose("[Test] Forge drop blocked: " + carriedAny.Name + " no-op craft with " + leftTool.Name);
                             ModEntry.DiagVerbose($"[Forge]   -> {carriedAny.Name} cannot enchant/forge {leftTool.Name} (no-op craft); refusing");
                             return false;
                         }
@@ -828,6 +874,7 @@ namespace MultiRingInfiniteForging
 
                     if (!acceptsInRight)
                     {
+                        ModEntry.DiagVerbose("[Test] Forge drop blocked: " + carriedAny.Name + " not accepted in right slot (left=" + (leftItem?.Name ?? "null") + ")");
                         ModEntry.DiagVerbose($"[Forge]   -> {carriedAny.Name} not accepted in forge.right (left={leftItem?.Name ?? "null"}); refusing");
                         return false;
                     }
@@ -836,6 +883,7 @@ namespace MultiRingInfiniteForging
                     {
                         __instance.rightIngredientSpot.item = carriedAny;
                         Game1.player.CursorSlotItem = null;
+                        ModEntry.DiagVerbose("[Test] Forge drop accepted: " + carriedAny.Name + " → right slot");
                         ModEntry.DiagVerbose($"[Forge]   -> placed {carriedAny.Name} in forge.right");
                         if (playSound) Game1.playSound("stoneStep");
                         return false;
@@ -844,299 +892,18 @@ namespace MultiRingInfiniteForging
                     // Swap.
                     __instance.rightIngredientSpot.item = carriedAny;
                     Game1.player.CursorSlotItem = rightExisting;
+                    ModEntry.DiagVerbose("[Test] Forge swap: " + carriedAny.Name + " ↔ " + rightExisting.Name + " in right slot");
                     ModEntry.DiagVerbose($"[Forge]   -> swapped forge.right: was {rightExisting.Name}, now {carriedAny.Name}");
                     if (playSound) Game1.playSound("stoneStep");
                     return false;
                 }
             }
 
-            // === CURSOR-HELD RING DROP HANDLING ===
-            if (Game1.player.CursorSlotItem is Ring carriedRing)
-            {
-                ModEntry.DiagVerbose($"[Forge] Click at ({x},{y}) carrying {carriedRing.Name}");
+            if (Game1.player.CursorSlotItem is Ring)
+                return HandleCursorRingDrop(__instance, x, y, playSound);
 
-                // 1) Left Ring equipment icon (forge names it "Ring1").
-                var leftRingIcon = __instance.equipmentIcons.Find(c => c.name == "Ring1");
-                if (leftRingIcon != null && leftRingIcon.containsPoint(x, y))
-                {
-                    Ring? existing = Game1.player.leftRing.Value;
-                    if (existing != null && IsRingBlockedByDuplicateCap(existing, __instance))
-                    {
-                        ModEntry.DiagVerbose($"[Forge]   -> Left Ring swap refused: {existing.Name} blocked by duplicate cap");
-                        return false;
-                    }
-                    ModEntry.DiagVerbose($"[Forge]   -> drop onto Left Ring icon");
-                    existing?.onUnequip(Game1.player);
-                    Game1.player.leftRing.Value = carriedRing;
-                    carriedRing.onEquip(Game1.player);
-                    Game1.player.CursorSlotItem = existing;
-                    if (playSound) Game1.playSound("crit");
-                    return false;
-                }
-
-                // 2) Right Ring equipment icon (forge names it "Ring2").
-                var rightRingIcon = __instance.equipmentIcons.Find(c => c.name == "Ring2");
-                if (rightRingIcon != null && rightRingIcon.containsPoint(x, y))
-                {
-                    Ring? existing = Game1.player.rightRing.Value;
-                    if (existing != null && IsRingBlockedByDuplicateCap(existing, __instance))
-                    {
-                        ModEntry.DiagVerbose($"[Forge]   -> Right Ring swap refused: {existing.Name} blocked by duplicate cap");
-                        return false;
-                    }
-                    ModEntry.DiagVerbose($"[Forge]   -> drop onto Right Ring icon");
-                    existing?.onUnequip(Game1.player);
-                    Game1.player.rightRing.Value = carriedRing;
-                    carriedRing.onEquip(Game1.player);
-                    Game1.player.CursorSlotItem = existing;
-                    if (playSound) Game1.playSound("crit");
-                    return false;
-                }
-
-                // 3) Forge left ingredient slot.
-                if (__instance.leftIngredientSpot.containsPoint(x, y))
-                {
-                    Item? leftItem = __instance.leftIngredientSpot.item;
-                    if (leftItem == null)
-                    {
-                        Item? rightItem = __instance.rightIngredientSpot.item;
-                        if (rightItem == null || IsValidCraft(__instance, carriedRing, rightItem))
-                        {
-                            ModEntry.DiagVerbose($"[Forge]   -> drop onto forge.left");
-                            __instance.leftIngredientSpot.item = carriedRing;
-                            Game1.player.CursorSlotItem = null;
-                            if (playSound) Game1.playSound("stoneStep");
-                            return false;
-                        }
-                        ModEntry.DiagVerbose($"[Forge]   -> forge.left would create invalid combination with right={rightItem?.Name}; refusing");
-                        return false;
-                    }
-                    // forge.left is occupied: only allow swap if it's a Ring (validating
-                    // ring↔ring or empty-right state).  Anything else: block — don't fall
-                    // through to vanilla, which would let the user pick up a sword and end
-                    // up with both a ring and a sword on the cursor.
-                    if (leftItem is Ring)
-                    {
-                        Item? rightItem = __instance.rightIngredientSpot.item;
-                        if (rightItem == null || IsValidCraft(__instance, carriedRing, rightItem))
-                        {
-                            ModEntry.DiagVerbose($"[Forge]   -> swap with forge.left (existing ring)");
-                            __instance.leftIngredientSpot.item = carriedRing;
-                            Game1.player.CursorSlotItem = leftItem;
-                            if (playSound) Game1.playSound("crit");
-                            return false;
-                        }
-                    }
-                    ModEntry.DiagVerbose($"[Forge]   -> forge.left occupied with non-Ring or invalid pair; blocking click");
-                    return false;
-                }
-
-                // 4) Forge right ingredient slot.
-                if (__instance.rightIngredientSpot.containsPoint(x, y))
-                {
-                    Item? rightItem = __instance.rightIngredientSpot.item;
-                    if (rightItem == null)
-                    {
-                        Item? leftItem = __instance.leftIngredientSpot.item;
-                        // Vanilla allows placing a Ring in forge.right with empty forge.left.
-                        if (leftItem == null || IsValidCraft(__instance, leftItem, carriedRing))
-                        {
-                            ModEntry.DiagVerbose($"[Forge]   -> drop onto forge.right");
-                            __instance.rightIngredientSpot.item = carriedRing;
-                            Game1.player.CursorSlotItem = null;
-                            if (playSound) Game1.playSound("stoneStep");
-                            return false;
-                        }
-                        ModEntry.DiagVerbose($"[Forge]   -> forge.right would not form a valid craft with left={leftItem?.Name}; refusing");
-                        return false;
-                    }
-                    if (rightItem is Ring)
-                    {
-                        Item? leftItem = __instance.leftIngredientSpot.item;
-                        if (leftItem == null || IsValidCraft(__instance, leftItem, carriedRing))
-                        {
-                            ModEntry.DiagVerbose($"[Forge]   -> swap with forge.right (existing ring)");
-                            __instance.rightIngredientSpot.item = carriedRing;
-                            Game1.player.CursorSlotItem = rightItem;
-                            if (playSound) Game1.playSound("crit");
-                            return false;
-                        }
-                    }
-                    ModEntry.DiagVerbose($"[Forge]   -> forge.right occupied with non-Ring or invalid pair; blocking click");
-                    return false;
-                }
-
-                // 5) Inventory slot.  Allow swap only if target is null OR a forge-valid item.
-                int invIdx = __instance.inventory.getInventoryPositionOfClick(x, y);
-                if (invIdx >= 0 && invIdx < __instance.inventory.actualInventory.Count)
-                {
-                    Item? existing = __instance.inventory.actualInventory[invIdx];
-                    if (existing == null || IsValidForgeItem(__instance, existing))
-                    {
-                        ModEntry.DiagVerbose($"[Forge]   -> drop onto inventory slot {invIdx}");
-                        __instance.inventory.actualInventory[invIdx] = carriedRing;
-                        Game1.player.CursorSlotItem = existing;
-                        if (playSound) Game1.playSound("coin");
-                        return false;
-                    }
-                    ModEntry.DiagVerbose($"[Forge]   -> inventory slot {invIdx} holds non-forge item ({existing.Name}); not swapping");
-                    return false;
-                }
-
-                // 6) Panel slot.
-                if (_panelOpen)
-                {
-                    foreach (var slot in Slots)
-                    {
-                        if (!slot.containsPoint(x, y)) continue;
-                        int idx = SlotIndex(slot);
-                        if (idx < 0) return true;
-
-                        Ring? slotRing = RingSlotManager.Slots[idx];
-                        if (slotRing != null && IsRingBlockedByDuplicateCap(slotRing, __instance))
-                        {
-                            ModEntry.DiagVerbose($"[Forge]   -> panel slot {idx} swap refused: {slotRing.Name} blocked by duplicate cap");
-                            return false;
-                        }
-                        ModEntry.DiagVerbose($"[Forge]   -> drop onto panel slot {idx}");
-                        RingSlotManager.Equip(idx, carriedRing);
-                        Game1.player.CursorSlotItem = slotRing;
-                        if (playSound) Game1.playSound("crit");
-                        return false;
-                    }
-                }
-
-                // Cursor is carrying a ring and click missed every drop target.
-                // Block the click entirely so vanilla doesn't pick up a second item
-                // (e.g. a sword from inventory) onto its private heldItem field.
-                ModEntry.DiagVerbose($"[Forge]   -> no target found; blocking click while carrying ring");
-                return false;
-            }
-
-            // === EMPTY CURSOR: PICK UP FROM EQUIPMENT, FORGE SLOTS, OR PANEL ===
             if (Game1.player.CursorSlotItem == null)
-            {
-                // Vanilla Ring1/Ring2 equipped-ring icons → pick up to cursor.
-                // (Works regardless of panel state, so the cursor-driven workflow is consistent.)
-                var leftRingIcon = __instance.equipmentIcons.Find(c => c.name == "Ring1");
-                if (leftRingIcon != null && leftRingIcon.containsPoint(x, y)
-                    && Game1.player.leftRing.Value is Ring leftRing)
-                {
-                    if (IsRingBlockedByDuplicateCap(leftRing, __instance))
-                    {
-                        ModEntry.DiagVerbose($"[Forge] Pick up Left Ring {leftRing.Name} blocked by duplicate cap");
-                        return false;
-                    }
-                    ModEntry.DiagVerbose($"[Forge] Pick up Left Ring {leftRing.Name} to cursor");
-                    leftRing.onUnequip(Game1.player);
-                    Game1.player.leftRing.Value = null;
-                    Game1.player.CursorSlotItem = leftRing;
-                    if (playSound) Game1.playSound("crit");
-                    return false;
-                }
-
-                var rightRingIcon = __instance.equipmentIcons.Find(c => c.name == "Ring2");
-                if (rightRingIcon != null && rightRingIcon.containsPoint(x, y)
-                    && Game1.player.rightRing.Value is Ring rightRing)
-                {
-                    if (IsRingBlockedByDuplicateCap(rightRing, __instance))
-                    {
-                        ModEntry.DiagVerbose($"[Forge] Pick up Right Ring {rightRing.Name} blocked by duplicate cap");
-                        return false;
-                    }
-                    ModEntry.DiagVerbose($"[Forge] Pick up Right Ring {rightRing.Name} to cursor");
-                    rightRing.onUnequip(Game1.player);
-                    Game1.player.rightRing.Value = null;
-                    Game1.player.CursorSlotItem = rightRing;
-                    if (playSound) Game1.playSound("crit");
-                    return false;
-                }
-
-                // The rest of the pickup paths only apply when the panel is open.
-                // Exception: when the duplicate cap is active and a ring is in a forge slot,
-                // we must intercept inventory clicks to block picking up blocked rings even
-                // when the panel is closed — vanilla has no knowledge of the duplicate cap.
-                if (!_panelOpen)
-                {
-                    if (ModEntry.Instance.Config.AddCombinedDuplicateRingCap
-                        && ModEntry.Instance.Config.InfiniteCombining
-                        && (__instance.leftIngredientSpot.item is Ring || __instance.rightIngredientSpot.item is Ring))
-                    {
-                        int invBlockIdx = __instance.inventory.getInventoryPositionOfClick(x, y);
-                        if (invBlockIdx >= 0
-                            && invBlockIdx < __instance.inventory.actualInventory.Count
-                            && __instance.inventory.actualInventory[invBlockIdx] is Ring invBlockRing
-                            && IsRingBlockedByDuplicateCap(invBlockRing, __instance))
-                        {
-                            ModEntry.DiagVerbose($"[Forge] Blocked vanilla inventory pickup of {invBlockRing.Name}: duplicate cap");
-                            return false;
-                        }
-                    }
-                    return true;
-                }
-
-                // Forge LEFT ingredient slot → pick up to cursor.
-                if (__instance.leftIngredientSpot.containsPoint(x, y)
-                    && __instance.leftIngredientSpot.item is Ring leftSlotRing)
-                {
-                    ModEntry.DiagVerbose($"[Forge] Pick up forge.left {leftSlotRing.Name} to cursor");
-                    __instance.leftIngredientSpot.item = null;
-                    Game1.player.CursorSlotItem = leftSlotRing;
-                    if (playSound) Game1.playSound("crit");
-                    return false;
-                }
-
-                // Forge RIGHT ingredient slot → pick up to cursor.
-                if (__instance.rightIngredientSpot.containsPoint(x, y)
-                    && __instance.rightIngredientSpot.item is Ring rightSlotRing)
-                {
-                    ModEntry.DiagVerbose($"[Forge] Pick up forge.right {rightSlotRing.Name} to cursor");
-                    __instance.rightIngredientSpot.item = null;
-                    Game1.player.CursorSlotItem = rightSlotRing;
-                    if (playSound) Game1.playSound("crit");
-                    return false;
-                }
-
-                // Inventory ring → pick up to cursor.
-                int invPickIdx = __instance.inventory.getInventoryPositionOfClick(x, y);
-                if (invPickIdx >= 0
-                    && invPickIdx < __instance.inventory.actualInventory.Count
-                    && __instance.inventory.actualInventory[invPickIdx] is Ring invRing)
-                {
-                    if (IsRingBlockedByDuplicateCap(invRing, __instance))
-                    {
-                        ModEntry.DiagVerbose($"[Forge] Blocked pickup of inventory ring {invRing.Name}: duplicate cap");
-                        return false;
-                    }
-                    ModEntry.DiagVerbose($"[Forge] Pick up inventory ring {invRing.Name} (slot {invPickIdx}) to cursor");
-                    __instance.inventory.actualInventory[invPickIdx] = null;
-                    Game1.player.CursorSlotItem = invRing;
-                    if (playSound) Game1.playSound("crit");
-                    return false;
-                }
-
-                // Panel slot with a ring → pick up to cursor.
-                foreach (var slot in Slots)
-                {
-                    if (!slot.containsPoint(x, y)) continue;
-                    int idx = SlotIndex(slot);
-                    if (idx < 0) return true;
-
-                    Ring? slotRing = RingSlotManager.Slots[idx];
-                    if (slotRing == null) return false;
-
-                    if (IsRingBlockedByDuplicateCap(slotRing, __instance))
-                    {
-                        ModEntry.DiagVerbose($"[Forge] Blocked pickup of panel ring {slotRing.Name}: duplicate cap");
-                        return false;
-                    }
-                    ModEntry.DiagVerbose($"[Forge] Pick up panel slot {idx} {slotRing.Name} to cursor");
-                    RingSlotManager.Equip(idx, null);
-                    Game1.player.CursorSlotItem = slotRing;
-                    if (playSound) Game1.playSound("crit");
-                    return false;
-                }
-            }
+                return HandleEmptyCursorPickup(__instance, x, y, playSound);
 
             // Let vanilla handle anything else.
             return true;
@@ -1261,6 +1028,7 @@ namespace MultiRingInfiniteForging
         public static void TogglePanel(bool playSound)
         {
             _panelOpen = !_panelOpen;
+            ModEntry.DiagVerbose("[Test] Forge panel toggled: open=" + _panelOpen);
             ApplyPanelVisibility();
             if (playSound) Game1.playSound(_panelOpen ? "bigSelect" : "bigDeSelect");
 
@@ -1324,38 +1092,117 @@ namespace MultiRingInfiniteForging
             }
         }
 
-        // NEW: track _heldItem after each click to see what vanilla did with it.
+        // Track _heldItem after each click to see what vanilla did with it.
         public static void LeftClick_Postfix(ForgeMenu __instance, int x, int y)
         {
             var held = GetHeldItem(__instance);
             ModEntry.DiagVerbose($"[Forge] *Postfix* click at ({x},{y})  cursor={Game1.player.CursorSlotItem?.Name ?? "null"}  forge.held={held?.Name ?? "null"}  forge.left={__instance.leftIngredientSpot.item?.Name ?? "null"}  forge.right={__instance.rightIngredientSpot.item?.Name ?? "null"}");
         }
 
-        // NEW: track _heldItem transitions during update().  Only log when it changes,
-        // so we don't flood the log every frame.
+        // Track forge ingredient slot transitions to detect forge completion.
         private static string? _lastHeldName;
-        private static string? _lastCraftResultName;
+        private static string? _lastUpdateLeftName;
+        private static string? _lastUpdateRightName;
+        private static List<string>? _preForgeCombinedRingNames;
+        private static bool _lastLeftWasRing;
         public static void Update_Postfix(ForgeMenu __instance)
         {
             var held = GetHeldItem(__instance);
             var heldName = held?.Name ?? "null";
-            var craftResult = __instance.craftResultDisplay?.item;
-            var craftResultName = craftResult?.Name ?? "null";
+
+            var leftItem = __instance.leftIngredientSpot.item;
+            var rightItem = __instance.rightIngredientSpot.item;
+            var leftName = leftItem?.Name ?? "null";
+            var rightName = rightItem?.Name ?? "null";
 
             if (heldName != _lastHeldName)
             {
                 ModEntry.DiagVerbose($"[Forge] update: forge.held transitioned {_lastHeldName ?? "(init)"} -> {heldName}");
                 _lastHeldName = heldName;
             }
-            if (craftResultName != _lastCraftResultName)
+
+            // Detect forge completion: both ingredient slots transition from
+            // non-null to null in the same frame (the forge consumed them).
+            // Manual pickups change only one slot at a time.
+            bool forgeConsumed = _lastUpdateLeftName != null && _lastUpdateLeftName != "null"
+                && _lastUpdateRightName != null && _lastUpdateRightName != "null"
+                && leftName == "null" && rightName == "null";
+
+            if (forgeConsumed)
             {
-                ModEntry.DiagVerbose($"[Forge] update: craftResultDisplay transitioned {_lastCraftResultName ?? "(init)"} -> {craftResultName}");
-                _lastCraftResultName = craftResultName;
+                var result = __instance.craftResultDisplay?.item;
+                if (result is CombinedRing cr)
+                {
+                    var names = string.Join(", ", cr.combinedRings.Select(r => r.Name));
+                    ModEntry.DiagVerbose("[Test] Forge result: CombinedRing [" + names + "] (" + cr.combinedRings.Count + " rings)");
+                }
+                else if (result != null)
+                {
+                    ModEntry.DiagVerbose("[Test] Forge result: " + result.Name);
+                }
+                else if (_preForgeCombinedRingNames != null)
+                {
+                    var allNames = string.Join(", ", _preForgeCombinedRingNames) + ", " + _lastUpdateRightName;
+                    ModEntry.DiagVerbose("[Test] Forge result: CombinedRing [" + allNames + "] (" + (_preForgeCombinedRingNames.Count + 1) + " rings)");
+                }
+                else if (_lastLeftWasRing)
+                {
+                    ModEntry.DiagVerbose("[Test] Forge result: CombinedRing [" + _lastUpdateLeftName + ", " + _lastUpdateRightName + "] (2 rings)");
+                }
+                else
+                {
+                    ModEntry.DiagVerbose("[Test] Forge result: consumed " + _lastUpdateLeftName + " + " + _lastUpdateRightName);
+                }
             }
+
+            // Save slot state for next frame's forge detection.
+            _lastLeftWasRing = leftItem is Ring;
+            if (leftItem is CombinedRing leftCr)
+                _preForgeCombinedRingNames = leftCr.combinedRings.Select(r => r.Name).ToList();
+            else
+                _preForgeCombinedRingNames = null;
+
+            _lastUpdateLeftName = leftName;
+            _lastUpdateRightName = rightName;
         }
         // ============================================================
         //  Helpers
         // ============================================================
+
+        /// <summary>Returns true if <paramref name="ring"/> is NOT dimmed — i.e. it
+        /// passes the current forge-context checks (non-ring-in-slot guard, vanilla
+        /// IsValidCraft when InfiniteCombining is off, duplicate cap when
+        /// InfiniteCombining + AddCombinedDuplicateRingCap are on).
+        /// Mirrors the dimming logic in <see cref="Draw_Postfix"/>.</summary>
+        private static bool IsRingAllowedInForgeContext(Ring ring, ForgeMenu menu)
+        {
+            bool nonRingInSlot =
+                (menu.leftIngredientSpot.item  != null && menu.leftIngredientSpot.item  is not Ring) ||
+                (menu.rightIngredientSpot.item != null && menu.rightIngredientSpot.item is not Ring);
+            if (nonRingInSlot) return false;
+
+            var forgeLeftRing  = menu.leftIngredientSpot.item  as Ring;
+            var forgeRightRing = menu.rightIngredientSpot.item as Ring;
+
+            if (!ModEntry.Instance.Config.InfiniteCombining)
+            {
+                if (forgeLeftRing != null && !IsValidCraft(menu, forgeLeftRing, ring))
+                    return false;
+                if (forgeRightRing != null && forgeLeftRing == null && !IsValidCraft(menu, ring, forgeRightRing))
+                    return false;
+                return true;
+            }
+
+            if (ModEntry.Instance.Config.AddCombinedDuplicateRingCap)
+            {
+                if (forgeLeftRing != null && Patches.WouldCreateDuplicateRing(forgeLeftRing, ring))
+                    return false;
+                if (forgeRightRing != null && Patches.WouldCreateDuplicateRing(forgeRightRing, ring))
+                    return false;
+            }
+
+            return true;
+        }
 
         private static bool IsRingBlockedByDuplicateCap(Ring ring, ForgeMenu menu)
         {
@@ -1367,6 +1214,339 @@ namespace MultiRingInfiniteForging
             if (menu.rightIngredientSpot.item is Ring rightRing && Patches.WouldCreateDuplicateRing(rightRing, ring))
                 return true;
             return false;
+        }
+
+        /// <summary>Handles left-click while the cursor is carrying a Ring.  Attempts
+        /// to drop/swap at equipment icons, forge ingredient slots, inventory, or
+        /// panel slots.  Returns false (skip vanilla) in all cases — the cursor
+        /// ring should never reach vanilla's click handler.</summary>
+        private static bool HandleCursorRingDrop(ForgeMenu menu, int x, int y, bool playSound)
+        {
+            Ring carriedRing = (Ring)Game1.player.CursorSlotItem!;
+            ModEntry.DiagVerbose("[Test] Forge cursor drop: carrying " + carriedRing.Name);
+            ModEntry.DiagVerbose($"[Forge] Click at ({x},{y}) carrying {carriedRing.Name}");
+
+            // 1) Left Ring equipment icon (forge names it "Ring1").
+            var leftRingIcon = menu.equipmentIcons.Find(c => c.name == "Ring1");
+            if (leftRingIcon != null && leftRingIcon.containsPoint(x, y))
+            {
+                Ring? existing = Game1.player.leftRing.Value;
+                if (existing != null && IsRingBlockedByDuplicateCap(existing, menu))
+                {
+                    ModEntry.DiagVerbose("[Test] Forge cursor drop blocked: " + existing.Name + " duplicate cap on left ring");
+                    ModEntry.DiagVerbose($"[Forge]   -> Left Ring swap refused: {existing.Name} blocked by duplicate cap");
+                    return false;
+                }
+                ModEntry.DiagVerbose("[Test] Forge cursor drop: " + carriedRing.Name + " → left ring equipment slot");
+                ModEntry.DiagVerbose($"[Forge]   -> drop onto Left Ring icon");
+                existing?.onUnequip(Game1.player);
+                Game1.player.leftRing.Value = carriedRing;
+                carriedRing.onEquip(Game1.player);
+                Game1.player.CursorSlotItem = existing;
+                if (playSound) Game1.playSound("crit");
+                return false;
+            }
+
+            // 2) Right Ring equipment icon (forge names it "Ring2").
+            var rightRingIcon = menu.equipmentIcons.Find(c => c.name == "Ring2");
+            if (rightRingIcon != null && rightRingIcon.containsPoint(x, y))
+            {
+                Ring? existing = Game1.player.rightRing.Value;
+                if (existing != null && IsRingBlockedByDuplicateCap(existing, menu))
+                {
+                    ModEntry.DiagVerbose("[Test] Forge cursor drop blocked: " + existing.Name + " duplicate cap on right ring");
+                    ModEntry.DiagVerbose($"[Forge]   -> Right Ring swap refused: {existing.Name} blocked by duplicate cap");
+                    return false;
+                }
+                ModEntry.DiagVerbose("[Test] Forge cursor drop: " + carriedRing.Name + " → right ring equipment slot");
+                ModEntry.DiagVerbose($"[Forge]   -> drop onto Right Ring icon");
+                existing?.onUnequip(Game1.player);
+                Game1.player.rightRing.Value = carriedRing;
+                carriedRing.onEquip(Game1.player);
+                Game1.player.CursorSlotItem = existing;
+                if (playSound) Game1.playSound("crit");
+                return false;
+            }
+
+            // 3) Forge left ingredient slot.
+            if (menu.leftIngredientSpot.containsPoint(x, y))
+            {
+                Item? leftItem = menu.leftIngredientSpot.item;
+                if (leftItem == null)
+                {
+                    Item? rightItem = menu.rightIngredientSpot.item;
+                    if (rightItem == null || IsValidCraft(menu, carriedRing, rightItem))
+                    {
+                        ModEntry.DiagVerbose($"[Forge]   -> drop onto forge.left");
+                        menu.leftIngredientSpot.item = carriedRing;
+                        Game1.player.CursorSlotItem = null;
+                        if (playSound) Game1.playSound("stoneStep");
+                        return false;
+                    }
+                    ModEntry.DiagVerbose($"[Forge]   -> forge.left would create invalid combination with right={rightItem?.Name}; refusing");
+                    return false;
+                }
+                if (leftItem is Ring)
+                {
+                    Item? rightItem = menu.rightIngredientSpot.item;
+                    if (rightItem == null || IsValidCraft(menu, carriedRing, rightItem))
+                    {
+                        ModEntry.DiagVerbose($"[Forge]   -> swap with forge.left (existing ring)");
+                        menu.leftIngredientSpot.item = carriedRing;
+                        Game1.player.CursorSlotItem = leftItem;
+                        if (playSound) Game1.playSound("crit");
+                        return false;
+                    }
+                }
+                ModEntry.DiagVerbose($"[Forge]   -> forge.left occupied with non-Ring or invalid pair; blocking click");
+                return false;
+            }
+
+            // 4) Forge right ingredient slot.
+            if (menu.rightIngredientSpot.containsPoint(x, y))
+            {
+                Item? rightItem = menu.rightIngredientSpot.item;
+                if (rightItem == null)
+                {
+                    Item? leftItem = menu.leftIngredientSpot.item;
+                    if (leftItem == null || IsValidCraft(menu, leftItem, carriedRing))
+                    {
+                        ModEntry.DiagVerbose($"[Forge]   -> drop onto forge.right");
+                        menu.rightIngredientSpot.item = carriedRing;
+                        Game1.player.CursorSlotItem = null;
+                        if (playSound) Game1.playSound("stoneStep");
+                        return false;
+                    }
+                    ModEntry.DiagVerbose($"[Forge]   -> forge.right would not form a valid craft with left={leftItem?.Name}; refusing");
+                    return false;
+                }
+                if (rightItem is Ring)
+                {
+                    Item? leftItem = menu.leftIngredientSpot.item;
+                    if (leftItem == null || IsValidCraft(menu, leftItem, carriedRing))
+                    {
+                        ModEntry.DiagVerbose($"[Forge]   -> swap with forge.right (existing ring)");
+                        menu.rightIngredientSpot.item = carriedRing;
+                        Game1.player.CursorSlotItem = rightItem;
+                        if (playSound) Game1.playSound("crit");
+                        return false;
+                    }
+                }
+                ModEntry.DiagVerbose($"[Forge]   -> forge.right occupied with non-Ring or invalid pair; blocking click");
+                return false;
+            }
+
+            // 5) Inventory slot.
+            int invIdx = menu.inventory.getInventoryPositionOfClick(x, y);
+            if (invIdx >= 0 && invIdx < menu.inventory.actualInventory.Count)
+            {
+                Item? existing = menu.inventory.actualInventory[invIdx];
+                if (existing == null || IsValidForgeItem(menu, existing))
+                {
+                    // If the swap would lift a dimmed ring onto the cursor, block it.
+                    if (existing is Ring existingRing && !IsRingAllowedInForgeContext(existingRing, menu))
+                    {
+                        ModEntry.DiagVerbose("[Test] Forge cursor drop blocked: inventory " + existingRing.Name + " dimmed");
+                        ModEntry.DiagVerbose($"[Forge]   -> inventory slot {invIdx} holds dimmed ring {existingRing.Name}; refusing swap");
+                        return false;
+                    }
+                    ModEntry.DiagVerbose($"[Forge]   -> drop onto inventory slot {invIdx}");
+                    menu.inventory.actualInventory[invIdx] = carriedRing;
+                    Game1.player.CursorSlotItem = existing;
+                    if (playSound) Game1.playSound("coin");
+                    return false;
+                }
+                ModEntry.DiagVerbose($"[Forge]   -> inventory slot {invIdx} holds non-forge item ({existing.Name}); not swapping");
+                return false;
+            }
+
+            // 6) Panel slot.
+            if (_panelOpen)
+            {
+                foreach (var slot in Slots)
+                {
+                    if (!slot.containsPoint(x, y)) continue;
+                    int idx = SlotIndex(slot);
+                    if (idx < 0) return true;
+
+                    Ring? slotRing = RingSlotManager.Slots[idx];
+                    if (slotRing != null)
+                    {
+                        if (!IsRingAllowedInForgeContext(slotRing, menu))
+                        {
+                            ModEntry.DiagVerbose("[Test] Forge cursor drop blocked: panel slot " + idx + " " + slotRing.Name + " dimmed");
+                            ModEntry.DiagVerbose($"[Forge]   -> panel slot {idx} swap refused: {slotRing.Name} dimmed by forge context");
+                            return false;
+                        }
+                        if (IsRingBlockedByDuplicateCap(slotRing, menu))
+                        {
+                            ModEntry.DiagVerbose("[Test] Forge cursor drop blocked: panel slot " + idx + " " + slotRing.Name + " duplicate cap");
+                            ModEntry.DiagVerbose($"[Forge]   -> panel slot {idx} swap refused: {slotRing.Name} blocked by duplicate cap");
+                            return false;
+                        }
+                    }
+                    ModEntry.DiagVerbose("[Test] Forge cursor drop: " + carriedRing.Name + " → panel slot " + idx);
+                    ModEntry.DiagVerbose($"[Forge]   -> drop onto panel slot {idx}");
+                    RingSlotManager.Equip(idx, carriedRing);
+                    Game1.player.CursorSlotItem = slotRing;
+                    if (playSound) Game1.playSound("crit");
+                    return false;
+                }
+            }
+
+            ModEntry.DiagVerbose($"[Forge]   -> no target found; blocking click while carrying ring");
+            return false;
+        }
+
+        /// <summary>Handles left-click with an empty cursor.  Attempts to pick up
+        /// rings from equipment icons, forge ingredient slots, inventory, and panel
+        /// slots.  Returns false (skip vanilla) when it handles the pickup, or true
+        /// to let vanilla process the click.</summary>
+        private static bool HandleEmptyCursorPickup(ForgeMenu menu, int x, int y, bool playSound)
+        {
+            // Vanilla Ring1/Ring2 equipped-ring icons → pick up to cursor.
+            var leftRingIcon = menu.equipmentIcons.Find(c => c.name == "Ring1");
+            if (leftRingIcon != null && leftRingIcon.containsPoint(x, y)
+                && Game1.player.leftRing.Value is Ring leftRing)
+            {
+                if (IsRingBlockedByDuplicateCap(leftRing, menu))
+                {
+                    ModEntry.DiagVerbose("[Test] Forge pickup blocked: " + leftRing.Name + " duplicate cap on left ring");
+                    ModEntry.DiagVerbose($"[Forge] Pick up Left Ring {leftRing.Name} blocked by duplicate cap");
+                    return false;
+                }
+                ModEntry.DiagVerbose("[Test] Forge pickup: " + leftRing.Name + " from left ring equipment");
+                ModEntry.DiagVerbose($"[Forge] Pick up Left Ring {leftRing.Name} to cursor");
+                leftRing.onUnequip(Game1.player);
+                Game1.player.leftRing.Value = null;
+                Game1.player.CursorSlotItem = leftRing;
+                if (playSound) Game1.playSound("crit");
+                return false;
+            }
+
+            var rightRingIcon = menu.equipmentIcons.Find(c => c.name == "Ring2");
+            if (rightRingIcon != null && rightRingIcon.containsPoint(x, y)
+                && Game1.player.rightRing.Value is Ring rightRing)
+            {
+                if (IsRingBlockedByDuplicateCap(rightRing, menu))
+                {
+                    ModEntry.DiagVerbose("[Test] Forge pickup blocked: " + rightRing.Name + " duplicate cap on right ring");
+                    ModEntry.DiagVerbose($"[Forge] Pick up Right Ring {rightRing.Name} blocked by duplicate cap");
+                    return false;
+                }
+                ModEntry.DiagVerbose("[Test] Forge pickup: " + rightRing.Name + " from right ring equipment");
+                ModEntry.DiagVerbose($"[Forge] Pick up Right Ring {rightRing.Name} to cursor");
+                rightRing.onUnequip(Game1.player);
+                Game1.player.rightRing.Value = null;
+                Game1.player.CursorSlotItem = rightRing;
+                if (playSound) Game1.playSound("crit");
+                return false;
+            }
+
+            // Panel-open-dependent fallbacks: forge slots, inventory, panel.
+            if (!_panelOpen)
+            {
+                // When the duplicate cap is active and a ring is in a forge slot,
+                // intercept inventory clicks to block picking up blocked rings even
+                // with panel closed — vanilla has no knowledge of the duplicate cap.
+                if (ModEntry.Instance.Config.AddCombinedDuplicateRingCap
+                    && ModEntry.Instance.Config.InfiniteCombining
+                    && (menu.leftIngredientSpot.item is Ring || menu.rightIngredientSpot.item is Ring))
+                {
+                    int invBlockIdx = menu.inventory.getInventoryPositionOfClick(x, y);
+                    if (invBlockIdx >= 0
+                        && invBlockIdx < menu.inventory.actualInventory.Count
+                        && menu.inventory.actualInventory[invBlockIdx] is Ring invBlockRing
+                        && IsRingBlockedByDuplicateCap(invBlockRing, menu))
+                    {
+                        ModEntry.DiagVerbose($"[Forge] Blocked vanilla inventory pickup of {invBlockRing.Name}: duplicate cap");
+                        return false;
+                    }
+                }
+                return true;
+            }
+
+            // Forge LEFT ingredient slot → pick up.
+            if (menu.leftIngredientSpot.containsPoint(x, y)
+                && menu.leftIngredientSpot.item is Ring leftSlotRing)
+            {
+                ModEntry.DiagVerbose("[Test] Forge pickup: " + leftSlotRing.Name + " from forge left slot");
+                ModEntry.DiagVerbose($"[Forge] Pick up forge.left {leftSlotRing.Name} to cursor");
+                menu.leftIngredientSpot.item = null;
+                Game1.player.CursorSlotItem = leftSlotRing;
+                if (playSound) Game1.playSound("crit");
+                return false;
+            }
+
+            // Forge RIGHT ingredient slot → pick up.
+            if (menu.rightIngredientSpot.containsPoint(x, y)
+                && menu.rightIngredientSpot.item is Ring rightSlotRing)
+            {
+                ModEntry.DiagVerbose("[Test] Forge pickup: " + rightSlotRing.Name + " from forge right slot");
+                ModEntry.DiagVerbose($"[Forge] Pick up forge.right {rightSlotRing.Name} to cursor");
+                menu.rightIngredientSpot.item = null;
+                Game1.player.CursorSlotItem = rightSlotRing;
+                if (playSound) Game1.playSound("crit");
+                return false;
+            }
+
+            // Inventory ring → pick up.
+            int invPickIdx = menu.inventory.getInventoryPositionOfClick(x, y);
+            if (invPickIdx >= 0
+                && invPickIdx < menu.inventory.actualInventory.Count
+                && menu.inventory.actualInventory[invPickIdx] is Ring invRing)
+            {
+                if (!IsRingAllowedInForgeContext(invRing, menu))
+                {
+                    ModEntry.DiagVerbose("[Test] Forge pickup blocked: inventory " + invRing.Name + " dimmed");
+                    ModEntry.DiagVerbose($"[Forge] Blocked pickup of inventory ring {invRing.Name}: dimmed by forge context");
+                    return false;
+                }
+                if (IsRingBlockedByDuplicateCap(invRing, menu))
+                {
+                    ModEntry.DiagVerbose("[Test] Forge pickup blocked: inventory " + invRing.Name + " duplicate cap");
+                    ModEntry.DiagVerbose($"[Forge] Blocked pickup of inventory ring {invRing.Name}: duplicate cap");
+                    return false;
+                }
+                ModEntry.DiagVerbose("[Test] Forge pickup: " + invRing.Name + " from inventory slot " + invPickIdx);
+                ModEntry.DiagVerbose($"[Forge] Pick up inventory ring {invRing.Name} (slot {invPickIdx}) to cursor");
+                menu.inventory.actualInventory[invPickIdx] = null;
+                Game1.player.CursorSlotItem = invRing;
+                if (playSound) Game1.playSound("crit");
+                return false;
+            }
+
+            // Panel slot → pick up.
+            foreach (var slot in Slots)
+            {
+                if (!slot.containsPoint(x, y)) continue;
+                int idx = SlotIndex(slot);
+                if (idx < 0) return true;
+
+                Ring? slotRing = RingSlotManager.Slots[idx];
+                if (slotRing == null) return false;
+
+                if (!IsRingAllowedInForgeContext(slotRing, menu))
+                {
+                    ModEntry.DiagVerbose("[Test] Forge pickup blocked: panel " + slotRing.Name + " dimmed");
+                    ModEntry.DiagVerbose($"[Forge] Blocked pickup of panel ring {slotRing.Name}: dimmed by forge context");
+                    return false;
+                }
+                if (IsRingBlockedByDuplicateCap(slotRing, menu))
+                {
+                    ModEntry.DiagVerbose("[Test] Forge pickup blocked: panel " + slotRing.Name + " duplicate cap");
+                    ModEntry.DiagVerbose($"[Forge] Blocked pickup of panel ring {slotRing.Name}: duplicate cap");
+                    return false;
+                }
+                ModEntry.DiagVerbose("[Test] Forge pickup: " + slotRing.Name + " from panel slot " + idx);
+                ModEntry.DiagVerbose($"[Forge] Pick up panel slot {idx} {slotRing.Name} to cursor");
+                RingSlotManager.Equip(idx, null);
+                Game1.player.CursorSlotItem = slotRing;
+                if (playSound) Game1.playSound("crit");
+                return false;
+            }
+
+            return true;
         }
 
         private static int SlotIndex(ClickableComponent c) =>
