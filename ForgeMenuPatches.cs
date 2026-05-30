@@ -19,7 +19,7 @@ namespace MultiRingInfiniteForging
         private const int ScrollUpBtnId = 119_998;
         private const int ScrollDownBtnId = 119_997;
         private const int ScrollBtnWidth = 40;
-        private const int ScrollBtnHeight = 16;
+        private const int ScrollBtnHeight = 44;
         private const int ScrollBarWidth = 6;
         private const int ScrollBarGap = 4;
 
@@ -230,8 +230,8 @@ namespace MultiRingInfiniteForging
                 scale: 4f)
             {
                 myID = ToggleButtonId,
-                upNeighborID = (menu.equipmentIcons.Find(c => c.name == "Right Ring")
-                                ?? menu.equipmentIcons.Find(c => c.name == "Left Ring"))?.myID
+                upNeighborID = (menu.equipmentIcons.Find(c => c.name == "Ring2")
+                                ?? menu.equipmentIcons.Find(c => c.name == "Ring1"))?.myID
                                ?? -99998,
                 downNeighborID = -99998,
                 leftNeighborID = -99998,
@@ -264,7 +264,7 @@ namespace MultiRingInfiniteForging
                 (rightEdge - leftMargin) / (SlotSize + SlotSpacing), 1, 4);
             int numRows = (RingSlotManager.SlotCount + maxPerRow - 1) / maxPerRow;
 
-            ClickableComponent? leftRing = menu.equipmentIcons.Find(c => c.name == "Left Ring");
+            ClickableComponent? leftRing = menu.equipmentIcons.Find(c => c.name == "Ring1");
             int panelTopY = leftRing?.bounds.Y ?? toggleBounds.Y;
             int gridEndX = rightEdge;
             int gridStartX = gridEndX - maxPerRow * (SlotSize + SlotSpacing);
@@ -308,8 +308,9 @@ namespace MultiRingInfiniteForging
             int maxPerRow = System.Math.Clamp(
                 (rightEdge - leftMargin) / (SlotSize + SlotSpacing), 1, 4);
 
-            ToggleButton.leftNeighborID = _panelOpen && Slots.Count > 0
-                ? Slots[System.Math.Min(maxPerRow - 1, Slots.Count - 1)].myID
+            int firstVisibleForge = _scrollOffset * maxPerRow;
+            ToggleButton.leftNeighborID = _panelOpen && firstVisibleForge < Slots.Count
+                ? Slots[firstVisibleForge].myID
                 : -99998;
             ToggleButton.rightNeighborID = -99998;
 
@@ -317,7 +318,7 @@ namespace MultiRingInfiniteForging
 
             int gridEndX = ToggleButton.bounds.X - SlotSpacing * 4;
             int gridStartX = gridEndX - maxPerRow * (SlotSize + SlotSpacing);
-            int panelTopY = (menu?.equipmentIcons.Find(c => c.name == "Left Ring") is { } lr)
+            int panelTopY = (menu?.equipmentIcons.Find(c => c.name == "Ring1") is { } lr)
                 ? lr.bounds.Y
                 : ToggleButton.bounds.Y;
 
@@ -345,7 +346,10 @@ namespace MultiRingInfiniteForging
                 if (_scrollUpBtn != null)
                     _scrollUpBtn.bounds = new Rectangle(scrollBtnX, panelTopY, ScrollBtnWidth, ScrollBtnHeight);
                 if (_scrollDownBtn != null)
-                    _scrollDownBtn.bounds = new Rectangle(scrollBtnX, panelTopY + visibleRows * (SlotSize + SlotSpacing), ScrollBtnWidth, ScrollBtnHeight);
+                    _scrollDownBtn.bounds = new Rectangle(scrollBtnX,
+                        System.Math.Min(panelTopY + visibleRows * (SlotSize + SlotSpacing),
+                            Game1.uiViewport.Height - ScrollBtnHeight - 8),
+                        ScrollBtnWidth, ScrollBtnHeight);
 
                 for (int i = 0; i < Slots.Count; i++)
                 {
@@ -367,10 +371,10 @@ namespace MultiRingInfiniteForging
                             ? ToggleButtonId
                             : FirstSlotId + i + 1;
                         Slots[i].upNeighborID = isFirstDisplayRow
-                            ? ScrollUpBtnId
+                            ? (_scrollOffset > 0 ? ScrollUpBtnId : -99998)
                             : FirstSlotId + i - maxPerRow;
                         Slots[i].downNeighborID = isLastDisplayRow
-                            ? ScrollDownBtnId
+                            ? (_scrollOffset < _maxScrollOffset ? ScrollDownBtnId : -99998)
                             : FirstSlotId + i + maxPerRow;
                     }
                     else
@@ -410,6 +414,7 @@ namespace MultiRingInfiniteForging
                         if (invIdx >= menu.inventory.inventory.Count) break;
 
                         int panelRow = r + _scrollOffset;
+                        if (panelRow >= _scrollOffset + visibleRows) break;
                         if (panelRow >= totalRows) break;
                         int panelLastCol = maxPerRow - 1;
                         int panelIdx = panelRow * maxPerRow + panelLastCol;
@@ -470,7 +475,7 @@ namespace MultiRingInfiniteForging
             if (_scrollDownBtn != null)
                 __instance.equipmentIcons.Add(_scrollDownBtn);
 
-            var rightRing = __instance.equipmentIcons.Find(c => c.name == "Right Ring");
+            var rightRing = __instance.equipmentIcons.Find(c => c.name == "Ring2");
             if (rightRing != null && ToggleButton != null)
                 rightRing.downNeighborID = ToggleButton.myID;
 
@@ -612,8 +617,8 @@ namespace MultiRingInfiniteForging
                     if (_scrollUpBtn != null && _scrollDownBtn != null && _maxScrollOffset > 0)
                     {
                         int trackX = _scrollUpBtn.bounds.X + (ScrollBtnWidth - ScrollBarWidth) / 2;
-                        int trackY = _scrollUpBtn.bounds.Y;
-                        int trackH = _scrollDownBtn.bounds.Bottom - trackY;
+                        int trackY = _scrollUpBtn.bounds.Bottom;
+                        int trackH = _scrollDownBtn.bounds.Y - trackY;
                         b.Draw(Game1.staminaRect,
                             new Rectangle(trackX, trackY, ScrollBarWidth, trackH),
                             new Color(0x40, 0x18, 0x10) * 0.7f);
@@ -635,7 +640,7 @@ namespace MultiRingInfiniteForging
                             ? Color.Gold : ForgeSlotFill;
                         Utility.drawWithShadow(b, Game1.mouseCursors,
                             new Vector2(_scrollUpBtn.bounds.X, _scrollUpBtn.bounds.Y),
-                            new Rectangle(76, 72, 40, 16), arrowCol, 0f, Vector2.Zero, 1f);
+                            new Rectangle(76, 72, 40, 44), arrowCol, 0f, Vector2.Zero, 1f);
                     }
                     if (_scrollOffset < _maxScrollOffset && _scrollDownBtn != null)
                     {
@@ -643,7 +648,7 @@ namespace MultiRingInfiniteForging
                             ? Color.Gold : ForgeSlotFill;
                         Utility.drawWithShadow(b, Game1.mouseCursors,
                             new Vector2(_scrollDownBtn.bounds.X, _scrollDownBtn.bounds.Y),
-                            new Rectangle(76, 88, 40, 16), arrowCol, 0f, Vector2.Zero, 1f);
+                            new Rectangle(12, 76, 40, 44), arrowCol, 0f, Vector2.Zero, 1f);
                     }
                 }
             
@@ -1317,7 +1322,7 @@ namespace MultiRingInfiniteForging
                     __instance.equipmentIcons.Add(_scrollUpBtn);
                 if (_scrollDownBtn != null)
                     __instance.equipmentIcons.Add(_scrollDownBtn);
-                var rightRing = __instance.equipmentIcons.Find(c => c.name == "Right Ring");
+            var rightRing = __instance.equipmentIcons.Find(c => c.name == "Ring2");
                 if (rightRing != null && ToggleButton != null)
                     rightRing.downNeighborID = ToggleButton.myID;
                 __instance.populateClickableComponentList();

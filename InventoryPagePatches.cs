@@ -20,7 +20,7 @@ namespace MultiRingInfiniteForging
         private const int ScrollUpBtnId = 109_998;
         private const int ScrollDownBtnId = 109_997;
         private const int ScrollBtnWidth = 40;
-        private const int ScrollBtnHeight = 16;
+        private const int ScrollBtnHeight = 44;
         private const int ScrollBarWidth = 6;
         private const int ScrollBarGap = 4;
 
@@ -287,14 +287,15 @@ namespace MultiRingInfiniteForging
         private static void ApplyPanelVisibility()
         {
             if (ToggleButton == null) return;
+            const int maxPerRow = 6;
 
-            ToggleButton.rightNeighborID = _panelOpen && Slots.Count > 0
-                ? Slots[0].myID
+            int firstVisibleInv = _scrollOffset * maxPerRow;
+            ToggleButton.rightNeighborID = _panelOpen && firstVisibleInv < Slots.Count
+                ? Slots[firstVisibleInv].myID
                 : -99998;
 
             int gridStartX = ToggleButton.bounds.X + SlotSize + SlotSpacing * 2;
             int panelTopY = ToggleButton.bounds.Y;
-            const int maxPerRow = 6;
 
             int windowBottom = Game1.uiViewport.Height - 16;
             int availableHeight = windowBottom - panelTopY;
@@ -335,12 +336,12 @@ namespace MultiRingInfiniteForging
                     lastVisibleSlot = i;
 
                     if (displayRow == 0)
-                        Slots[i].upNeighborID = ScrollUpBtnId;
+                        Slots[i].upNeighborID = _scrollOffset > 0 ? ScrollUpBtnId : -99998;
                     else
                         Slots[i].upNeighborID = FirstSlotId + i - maxPerRow;
 
                     if (displayRow == maxVisibleRows - 1 || row == totalRows - 1)
-                        Slots[i].downNeighborID = ScrollDownBtnId;
+                        Slots[i].downNeighborID = _scrollOffset < _maxScrollOffset ? ScrollDownBtnId : -99998;
                     else
                         Slots[i].downNeighborID = FirstSlotId + i + maxPerRow;
                 }
@@ -365,11 +366,57 @@ namespace MultiRingInfiniteForging
             if (_scrollDownBtn != null)
             {
                 int scrollBtnX = gridStartX + maxPerRow * (SlotSize + SlotSpacing) + ScrollBarGap;
-                _scrollDownBtn.bounds = new Rectangle(scrollBtnX, panelTopY + maxVisibleRows * (SlotSize + SlotSpacing), ScrollBtnWidth, ScrollBtnHeight);
+                _scrollDownBtn.bounds = new Rectangle(scrollBtnX,
+                        System.Math.Min(panelTopY + maxVisibleRows * (SlotSize + SlotSpacing),
+                            Game1.uiViewport.Height - ScrollBtnHeight - 16),
+                        ScrollBtnWidth, ScrollBtnHeight);
                 _scrollDownBtn.leftNeighborID = -99998;
                 _scrollDownBtn.rightNeighborID = -99998;
                 _scrollDownBtn.upNeighborID = lastVisibleSlot >= 0 ? FirstSlotId + lastVisibleSlot : -99998;
                 _scrollDownBtn.visible = _panelOpen && _scrollOffset < _maxScrollOffset;
+            }
+
+            // Wire panel's first visible row UP to inventory's bottom row.
+            if (_panelOpen)
+            {
+                var gm = Game1.activeClickableMenu as GameMenu;
+                var page2 = gm?.pages[GameMenu.inventoryTab] as InventoryPage;
+                if (page2 != null)
+                {
+                    int invCols2 = page2.inventory.capacity / page2.inventory.rows;
+                    if (invCols2 <= 0) invCols2 = 12;
+
+                    int firstPanelIdx = _scrollOffset * maxPerRow;
+                    int invBottomRowStart = (page2.inventory.rows - 1) * invCols2;
+
+                    for (int col = 0; col < maxPerRow && col < invCols2; col++)
+                    {
+                        int panelIdx = firstPanelIdx + col;
+                        int invIdx = invBottomRowStart + col;
+                        if (panelIdx < Slots.Count && invIdx < page2.inventory.inventory.Count)
+                        {
+                            Slots[panelIdx].upNeighborID = page2.inventory.inventory[invIdx].myID;
+                            page2.inventory.inventory[invIdx].downNeighborID = Slots[panelIdx].myID;
+                        }
+                    }
+                }
+            }
+            else
+            {
+                var gm = Game1.activeClickableMenu as GameMenu;
+                var page2 = gm?.pages[GameMenu.inventoryTab] as InventoryPage;
+                if (page2 != null)
+                {
+                    int invCols2 = page2.inventory.capacity / page2.inventory.rows;
+                    if (invCols2 <= 0) invCols2 = 12;
+                    int invBottomRowStart = (page2.inventory.rows - 1) * invCols2;
+                    for (int col = 0; col < invCols2; col++)
+                    {
+                        int invIdx = invBottomRowStart + col;
+                        if (invIdx < page2.inventory.inventory.Count)
+                            page2.inventory.inventory[invIdx].downNeighborID = -99998;
+                    }
+                }
             }
         }
 
@@ -458,8 +505,8 @@ namespace MultiRingInfiniteForging
                 if (_scrollUpBtn != null && _scrollDownBtn != null && _maxScrollOffset > 0)
                 {
                     int trackX = _scrollUpBtn.bounds.X + (ScrollBtnWidth - ScrollBarWidth) / 2;
-                    int trackY = _scrollUpBtn.bounds.Y;
-                    int trackH = _scrollDownBtn.bounds.Bottom - trackY;
+                    int trackY = _scrollUpBtn.bounds.Bottom;
+                    int trackH = _scrollDownBtn.bounds.Y - trackY;
                     b.Draw(Game1.staminaRect,
                         new Rectangle(trackX, trackY, ScrollBarWidth, trackH),
                         new Color(60, 60, 60, 180));
@@ -481,7 +528,7 @@ namespace MultiRingInfiniteForging
                         ? Color.Gold : Color.White;
                     Utility.drawWithShadow(b, Game1.mouseCursors,
                         new Vector2(_scrollUpBtn.bounds.X, _scrollUpBtn.bounds.Y),
-                        new Rectangle(76, 72, 40, 16), arrowCol, 0f, Vector2.Zero, 1f);
+                        new Rectangle(76, 72, 40, 44), arrowCol, 0f, Vector2.Zero, 1f);
                 }
 
                 // Scroll down arrow
@@ -491,7 +538,7 @@ namespace MultiRingInfiniteForging
                         ? Color.Gold : Color.White;
                     Utility.drawWithShadow(b, Game1.mouseCursors,
                         new Vector2(_scrollDownBtn.bounds.X, _scrollDownBtn.bounds.Y),
-                        new Rectangle(76, 88, 40, 16), arrowCol, 0f, Vector2.Zero, 1f);
+                        new Rectangle(12, 76, 40, 44), arrowCol, 0f, Vector2.Zero, 1f);
                 }
             }
 
