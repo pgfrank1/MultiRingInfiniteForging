@@ -78,7 +78,7 @@ namespace MultiRingInfiniteForging
         private static readonly Color ForgeSlotTint  = new Color(0x6D, 0x0A, 0x03);
 
         /// <summary>Solid fill behind transparent slot frames so the toggle/slot has a
-        /// recessed look instead of empty transparent center.  Slightly darker than the
+        /// recessed look instead of an empty transparent center.  Slightly darker than the
         /// panel BG so the slot reads as a sunken cell.</summary>
         private static readonly Color ForgeSlotFill = new Color(0x9B, 0x40, 0x35);
 
@@ -262,7 +262,6 @@ namespace MultiRingInfiniteForging
             int leftMargin = 8;
             int maxPerRow = System.Math.Clamp(
                 (rightEdge - leftMargin) / (SlotSize + SlotSpacing), 1, 4);
-            int numRows = (RingSlotManager.SlotCount + maxPerRow - 1) / maxPerRow;
 
             ClickableComponent? leftRing = menu.equipmentIcons.Find(c => c.name == "Ring1");
             int panelTopY = leftRing?.bounds.Y ?? toggleBounds.Y;
@@ -283,14 +282,8 @@ namespace MultiRingInfiniteForging
                     name: "ExtraRing" + i)
                 {
                     myID = FirstSlotId + i,
-                    leftNeighborID = col == 0 ? -99998 : FirstSlotId + i - 1,
-                    rightNeighborID = col == maxPerRow - 1 || i == RingSlotManager.SlotCount - 1
-                        ? ToggleButtonId
-                        : FirstSlotId + i + 1,
-                    upNeighborID = row == 0 ? -99998 : FirstSlotId + i - maxPerRow,
-                    downNeighborID = row == numRows - 1 || i + maxPerRow >= RingSlotManager.SlotCount
-                        ? -99998
-                        : FirstSlotId + i + maxPerRow,
+                    // Neighbor IDs are assigned by ApplyPanelVisibility (called below and
+                    // on every toggle/scroll/resize); no need to wire them here.
                     fullyImmutable = true
                 };
                 Slots.Add(slot);
@@ -1304,8 +1297,19 @@ namespace MultiRingInfiniteForging
 
         private static string _hoverText = "";
 
+        /// <summary>Harmony postfix for ForgeMenu.performHoverAction that handles viewport changes
+        /// and updates hover text for custom UI elements.
+        /// Rebuilds slot positions when the viewport dimensions change and manages hover states
+        /// for the toggle button and extra ring slots.</summary>
+        /// <param name="__instance">The ForgeMenu instance being hovered over.</param>
+        /// <param name="x">The x-coordinate of the mouse cursor.</param>
+        /// <param name="y">The y-coordinate of the mouse cursor.</param>
         public static void Hover_Postfix(ForgeMenu __instance, int x, int y)
         {
+            // Rebuild the panel on viewport change. Unlike the inventory page's handler,
+            // we don't need to save/restore _panelOpen (no _userPanelOpen): this handler
+            // never mutates _panelOpen, so RebuildSlots -> ApplyPanelVisibility reads the
+            // user's real open state directly.
             var vp = Game1.uiViewport;
             if (vp.Width != _lastVpW || vp.Height != _lastVpH)
             {
@@ -1680,8 +1684,13 @@ namespace MultiRingInfiniteForging
 
         /// <summary>Handles left-click with an empty cursor.  Attempts to pick up
         /// rings from equipment icons, forge ingredient slots, inventory, and panel
-        /// slots.  Returns false (skip vanilla) when it handles the pickup, or true
-        /// to let vanilla process the click.</summary>
+        /// slots.</summary>
+        /// <param name="menu">The ForgeMenu instance being clicked.</param>
+        /// <param name="x">The x-coordinate of the click position.</param>
+        /// <param name="y">The y-coordinate of the click position.</param>
+        /// <param name="playSound">Whether to play a sound when picking up an item.</param>
+        /// <return>False when the method handles the pickup (skip vanilla processing), or true
+        /// to let vanilla process the click.</return>
         private static bool HandleEmptyCursorPickup(ForgeMenu menu, int x, int y, bool playSound)
         {
             // Vanilla Ring1/Ring2 equipped-ring icons → pick up to cursor.
@@ -1841,16 +1850,35 @@ namespace MultiRingInfiniteForging
             return true;
         }
 
+        /// <summary>
+        /// Converts a ClickableComponent's name to its corresponding slot index by parsing the numeric portion of the name.
+        /// </summary>
+        /// <param name="c">The ClickableComponent whose name should be parsed to extract the slot index.</param>
+        /// <return>The zero-based slot index if the name contains a valid integer after removing the "ExtraRing" prefix, otherwise -1.</return>
         private static int SlotIndex(ClickableComponent c) =>
             int.TryParse(c.name.Replace("ExtraRing", ""), out var i) ? i : -1;
 
+        /// <summary>
+        /// Retrieves the currently held item from the ForgeMenu using reflection to access the private _heldItem field.
+        /// </summary>
+        /// <param name="menu">The ForgeMenu instance to get the held item from.</param>
+        /// <return>The held Item if accessible, otherwise null.</return>
         private static Item? GetHeldItem(ForgeMenu menu) =>
             HeldItemField?.GetValue(menu) as Item;
 
+        /// <summary>Sets the held item in the forge menu by updating the private _heldItem field via reflection.</summary>
+        /// <param name="menu">The forge menu instance to modify.</param>
+        /// <param name="item">The item to set as held, or null to clear the held item.</param>
         private static void SetHeldItem(ForgeMenu menu, Item? item) =>
             HeldItemField?.SetValue(menu, item);
 
-        /// <summary>Invokes ForgeMenu.IsValidCraft via reflection (it's private).</summary>
+        /// <summary>
+        /// Invokes the private ForgeMenu.IsValidCraft method via reflection to determine if two items can be combined in the forge.
+        /// </summary>
+        /// <param name="menu">The ForgeMenu instance to invoke the method on.</param>
+        /// <param name="left">The item in the left slot of the forge.</param>
+        /// <param name="right">The item in the right slot of the forge.</param>
+        /// <return>True if the two items form a valid forge combination, false otherwise or if the reflection call fails.</return>
         private static bool IsValidCraft(ForgeMenu menu, Item? left, Item? right)
         {
             if (IsValidCraftMethod == null) return false;

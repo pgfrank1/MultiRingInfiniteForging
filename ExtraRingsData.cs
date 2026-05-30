@@ -2,17 +2,13 @@
 
 namespace MultiRingInfiniteForging
 {
-    /// <summary>Per-player save data: the extra equipped rings (item IDs + forged-onto data).</summary>
+    /// <summary>Represents the serialized save data structure for storing a player's extra equipped ring slots and overflow rings, containing item IDs and forging enchantment data.</summary>
     public class ExtraRingsData
     {
-        /// <summary>Index -> serialized ring (qualified item id). Null/empty means slot is empty.</summary>
+        /// <summary>The list of extra-equipped ring slots. Each element is a ring item or null if the slot is empty.</summary>
         public List<string?> Slots { get; set; } = new();
 
-        /// <summary>Rings that were in slots beyond the current ExtraRingSlots
-        /// count.  Kept here so reducing the slot count and then increasing it
-        /// restores them rather than losing them.  Cleared only by an explicit
-        /// drain (mrif_drain / GMCM eject button) or by saving while the slot
-        /// count is high enough to hold them all again.</summary>
+        /// <summary>Index -> serialized ring (qualified item id). Rings stored in slots beyond the current SlotCount.</summary>
         public List<string?> Overflow { get; set; } = new();
     }
 }

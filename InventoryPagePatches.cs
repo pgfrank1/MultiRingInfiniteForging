@@ -245,38 +245,10 @@ namespace MultiRingInfiniteForging
                     name: "ExtraRing" + i)
                 {
                     myID = FirstSlotId + i,
-                    leftNeighborID = col == 0
-                        ? ToggleButtonId
-                        : FirstSlotId + i - 1,
-                    rightNeighborID = (col == maxPerRow - 1 || i == RingSlotManager.SlotCount - 1)
-                        ? -99998
-                        : FirstSlotId + i + 1,
-                    upNeighborID = -99998,
-                    downNeighborID = -99998,
+                    // Neighbor IDs are assigned by ApplyPanelVisibility (called below and
+                    // on every toggle/scroll/resize); no need to wire them here.
                     fullyImmutable = true
                 };
-
-                // Wire D-pad navigation for visible rows
-                if (visible)
-                {
-                    if (displayRow == 0)
-                    {
-                        slot.upNeighborID = ScrollUpBtnId;
-                    }
-                    else
-                    {
-                        slot.upNeighborID = FirstSlotId + i - maxPerRow;
-                    }
-
-                    if (displayRow == maxVisibleRows - 1 || row == totalRows - 1)
-                    {
-                        slot.downNeighborID = ScrollDownBtnId;
-                    }
-                    else
-                    {
-                        slot.downNeighborID = FirstSlotId + i + maxPerRow;
-                    }
-                }
 
                 Slots.Add(slot);
             }
@@ -335,6 +307,13 @@ namespace MultiRingInfiniteForging
                     if (firstVisibleSlot < 0) firstVisibleSlot = i;
                     lastVisibleSlot = i;
 
+                    Slots[i].leftNeighborID = col == 0
+                        ? ToggleButtonId
+                        : FirstSlotId + i - 1;
+                    Slots[i].rightNeighborID = (col == maxPerRow - 1 || i == RingSlotManager.SlotCount - 1)
+                        ? -99998
+                        : FirstSlotId + i + 1;
+
                     if (displayRow == 0)
                         Slots[i].upNeighborID = _scrollOffset > 0 ? ScrollUpBtnId : -99998;
                     else
@@ -348,6 +327,8 @@ namespace MultiRingInfiniteForging
                 else
                 {
                     Slots[i].bounds = new Rectangle(-9999, -9999, 0, 0);
+                    Slots[i].leftNeighborID = -99998;
+                    Slots[i].rightNeighborID = -99998;
                     Slots[i].upNeighborID = -99998;
                     Slots[i].downNeighborID = -99998;
                 }
