@@ -199,6 +199,11 @@ namespace MultiRingInfiniteForging
                     Helper.WriteConfig(Config);
                     RingSlotManager.EnsureSize();  // <-- ensure this is present
                 });
+
+            // Optional cross-mod compatibility patches that must run after all mods have
+            // loaded (so their assemblies are available). No-op if the target mod is absent.
+            var harmony = new Harmony(ModManifest.UniqueID);
+            MoreRingsCompat.TryApply(harmony, Helper, Monitor);
         }
 
         /// <summary>Per-tick forwarder so light-source rings (Glow, Iridium Band,
