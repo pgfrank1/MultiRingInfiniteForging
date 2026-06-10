@@ -3,6 +3,7 @@ using HarmonyLib;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using StardewModdingAPI;
+using StardewModdingAPI.Utilities;
 using StardewValley;
 using StardewValley.Menus;
 using StardewValley.Objects;
@@ -42,16 +43,110 @@ namespace MultiRingInfiniteForging
         private static readonly System.Reflection.MethodInfo? IsValidCraftMethod =
             AccessTools.Method(typeof(ForgeMenu), "IsValidCraft");
 
-        private static readonly List<ClickableComponent> Slots = new();
-        private static ClickableTextureComponent? ToggleButton;
-        private static bool _panelOpen;
-        private static int _scrollOffset;
-        private static int _maxScrollOffset;
-        private static int _visibleRows;
-        private static ClickableComponent? _scrollUpBtn;
-        private static ClickableComponent? _scrollDownBtn;
-        private static int _lastVpW = -1;
-        private static int _lastVpH = -1;
+        /// <summary>All mutable panel/UI state, one instance per screen.  Split-screen
+        /// players each have their own menus, so sharing this across screens made one
+        /// screen's panel clobber the other's.  The properties below keep the original
+        /// member names so the rest of the file reads/writes them unchanged.</summary>
+        private sealed class PanelState
+        {
+            public readonly List<ClickableComponent> Slots = new();
+            public ClickableTextureComponent? ToggleButton;
+            public bool PanelOpen;
+            public int ScrollOffset;
+            public int MaxScrollOffset;
+            public int VisibleRows;
+            public ClickableComponent? ScrollUpBtn;
+            public ClickableComponent? ScrollDownBtn;
+            public int LastVpW = -1;
+            public int LastVpH = -1;
+            public string HoverText = "";
+
+            // Forge-completion trackers used by Update_Postfix diagnostics.
+            public string? LastHeldName;
+            public string? LastUpdateLeftName;
+            public string? LastUpdateRightName;
+            public List<string>? PreForgeCombinedRingNames;
+            public bool LastLeftWasRing;
+        }
+
+        private static readonly PerScreen<PanelState> StatePerScreen = new(() => new PanelState());
+
+        private static List<ClickableComponent> Slots => StatePerScreen.Value.Slots;
+        private static ClickableTextureComponent? ToggleButton
+        {
+            get => StatePerScreen.Value.ToggleButton;
+            set => StatePerScreen.Value.ToggleButton = value;
+        }
+        private static bool _panelOpen
+        {
+            get => StatePerScreen.Value.PanelOpen;
+            set => StatePerScreen.Value.PanelOpen = value;
+        }
+        private static int _scrollOffset
+        {
+            get => StatePerScreen.Value.ScrollOffset;
+            set => StatePerScreen.Value.ScrollOffset = value;
+        }
+        private static int _maxScrollOffset
+        {
+            get => StatePerScreen.Value.MaxScrollOffset;
+            set => StatePerScreen.Value.MaxScrollOffset = value;
+        }
+        private static int _visibleRows
+        {
+            get => StatePerScreen.Value.VisibleRows;
+            set => StatePerScreen.Value.VisibleRows = value;
+        }
+        private static ClickableComponent? _scrollUpBtn
+        {
+            get => StatePerScreen.Value.ScrollUpBtn;
+            set => StatePerScreen.Value.ScrollUpBtn = value;
+        }
+        private static ClickableComponent? _scrollDownBtn
+        {
+            get => StatePerScreen.Value.ScrollDownBtn;
+            set => StatePerScreen.Value.ScrollDownBtn = value;
+        }
+        private static int _lastVpW
+        {
+            get => StatePerScreen.Value.LastVpW;
+            set => StatePerScreen.Value.LastVpW = value;
+        }
+        private static int _lastVpH
+        {
+            get => StatePerScreen.Value.LastVpH;
+            set => StatePerScreen.Value.LastVpH = value;
+        }
+        private static string _hoverText
+        {
+            get => StatePerScreen.Value.HoverText;
+            set => StatePerScreen.Value.HoverText = value;
+        }
+        private static string? _lastHeldName
+        {
+            get => StatePerScreen.Value.LastHeldName;
+            set => StatePerScreen.Value.LastHeldName = value;
+        }
+        private static string? _lastUpdateLeftName
+        {
+            get => StatePerScreen.Value.LastUpdateLeftName;
+            set => StatePerScreen.Value.LastUpdateLeftName = value;
+        }
+        private static string? _lastUpdateRightName
+        {
+            get => StatePerScreen.Value.LastUpdateRightName;
+            set => StatePerScreen.Value.LastUpdateRightName = value;
+        }
+        private static List<string>? _preForgeCombinedRingNames
+        {
+            get => StatePerScreen.Value.PreForgeCombinedRingNames;
+            set => StatePerScreen.Value.PreForgeCombinedRingNames = value;
+        }
+        private static bool _lastLeftWasRing
+        {
+            get => StatePerScreen.Value.LastLeftWasRing;
+            set => StatePerScreen.Value.LastLeftWasRing = value;
+        }
 
         public static bool IsPanelOpen => _panelOpen;
         
@@ -1361,8 +1456,6 @@ namespace MultiRingInfiniteForging
         //  Hover
         // ============================================================
 
-        private static string _hoverText = "";
-
         /// <summary>Harmony postfix for ForgeMenu.performHoverAction that handles viewport changes
         /// and updates hover text for custom UI elements.
         /// Rebuilds slot positions when the viewport dimensions change and manages hover states
@@ -1438,11 +1531,7 @@ namespace MultiRingInfiniteForging
         }
 
         // Track forge ingredient slot transitions to detect forge completion.
-        private static string? _lastHeldName;
-        private static string? _lastUpdateLeftName;
-        private static string? _lastUpdateRightName;
-        private static List<string>? _preForgeCombinedRingNames;
-        private static bool _lastLeftWasRing;
+        // (Trackers live in PanelState so each split-screen player detects their own.)
         public static void Update_Postfix(ForgeMenu __instance)
         {
             var held = GetHeldItem(__instance);
