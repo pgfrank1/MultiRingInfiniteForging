@@ -274,7 +274,10 @@ namespace MultiRingInfiniteForging
         public static void IsWearingRing_Postfix(Farmer __instance, string itemId, ref bool __result)
         {
             if (__result) return;
-            foreach (var ring in RingSlotManager.Slots)
+            // GetRingsFor resolves any farmer: the live Slots for the local player, or the
+            // synced modData for remote players — so host-simulated checks (e.g. slime
+            // aggro vs a farmhand wearing Slime Charmer in a panel slot) work too.
+            foreach (var ring in RingSlotManager.GetRingsFor(__instance))
             {
                 if (ring == null) continue;
                 if (ring.GetsEffectOfRing(itemId))
@@ -291,8 +294,9 @@ namespace MultiRingInfiniteForging
         public static void MonsterDrop_Postfix(GameLocation __instance, Monster monster, int x, int y, Farmer who)
         {
             if (who == null || monster == null) return;
-            // Only the local player has extra-slot ring data on this client.
-            if (who != Game1.player) return;
+            // monsterDrop runs on the client simulating the location (usually the host);
+            // OnMonsterSlay resolves the killer's rings via GetRingsFor, so farmhand kills
+            // fire their extra-slot Vampire/Warrior/etc. effects just like vanilla rings.
             RingSlotManager.OnMonsterSlay(monster, __instance, who);
         }
         
@@ -306,11 +310,10 @@ namespace MultiRingInfiniteForging
             foreach (var item in __result)
                 yield return item;
 
-            // Only contribute our extra rings for the local player; remote farmers
-            // don't have ExtraRings data on this client.
-            if (__instance != Game1.player) yield break;
-
-            foreach (var ring in RingSlotManager.Slots)
+            // Local player: the live Slots list.  Remote farmers: reconstructed from their
+            // synced modData, so equipment-derived checks evaluated on this client (buffs,
+            // enchantment conditions, tooltips) see their extra rings too.
+            foreach (var ring in RingSlotManager.GetRingsFor(__instance))
             {
                 if (ring != null)
                     yield return ring;
@@ -408,17 +411,7 @@ namespace MultiRingInfiniteForging
                     return;
                 }
 
-                bool valid = false;
-                try
-                {
-                    var isValidCraft = AccessTools.Method(typeof(ForgeMenu), "IsValidCraft");
-                    if (isValidCraft != null)
-                    {
-                        var ret = isValidCraft.Invoke(__instance, new object?[] { leftItem, i });
-                        if (ret is bool b) valid = b;
-                    }
-                }
-                catch { /* leave valid = false */ }
+                bool valid = ForgeMenuPatches.IsValidCraft(__instance, leftItem, i);
 
                 if (valid
                     && ModEntry.Instance.Config.AddCombinedDuplicateRingCap
@@ -438,17 +431,7 @@ namespace MultiRingInfiniteForging
             if (leftItem is MeleeWeapon || leftItem is Slingshot
                                         || (leftItem is Tool t && t.UpgradeLevel > 0))
             {
-                bool valid = false;
-                try
-                {
-                    var isValidCraft = AccessTools.Method(typeof(ForgeMenu), "IsValidCraft");
-                    if (isValidCraft != null)
-                    {
-                        var ret = isValidCraft.Invoke(__instance, new object?[] { leftItem, i });
-                        if (ret is bool b) valid = b;
-                    }
-                }
-                catch { /* leave valid = false */ }
+                bool valid = ForgeMenuPatches.IsValidCraft(__instance, leftItem, i);
 
                 // Demote: dim items that would produce a no-op craft (e.g. Diamond
                 // on a tool that already has all 6 gem enchantments).
@@ -485,17 +468,7 @@ namespace MultiRingInfiniteForging
             // existing right ingredient.
             if (leftItem == null && rightItem != null)
             {
-                bool valid = false;
-                try
-                {
-                    var isValidCraft = AccessTools.Method(typeof(ForgeMenu), "IsValidCraft");
-                    if (isValidCraft != null)
-                    {
-                        var ret = isValidCraft.Invoke(__instance, new object?[] { i, rightItem });
-                        if (ret is bool b) valid = b;
-                    }
-                }
-                catch { /* leave valid = false */ }
+                bool valid = ForgeMenuPatches.IsValidCraft(__instance, i, rightItem);
 
                 // Demote: no-op craft.
                 if (valid && i is Tool prospectiveLeftToolDemote
@@ -577,6 +550,18 @@ namespace MultiRingInfiniteForging
                 return false;
             }
 
+            // Defer melee forge/secondary enchantments (gems, Galaxy Souls, innate stats)
+            // to vanilla: its melee branch already stacks them, with same-type level-up
+            // (Ruby I -> Ruby II rather than two "Ruby I" instances), GetMaximumLevel caps,
+            // and the single leveled GalaxySoulEnchantment instance the Infinity transform
+            // removes cleanly.  MultipleEnchantments only needs to bypass the RemoveAll in
+            // vanilla's *tool/weapon enchantment* branch, replicated below.
+            if (__instance is MeleeWeapon && (enchantment.IsForge() || enchantment.IsSecondaryEnchantment()))
+            {
+                ModEntry.DiagVerbose("[Test] AddEnchantment: forge/secondary on melee weapon, running vanilla");
+                return true;
+            }
+
             ModEntry.DiagVerbose("[Test] AddEnchantment: adding " + enchantment.GetType().Name + " to " + __instance.Name + " (MultipleEnchantments mode)");
             __instance.enchantments.Add(enchantment);
             enchantment.ApplyTo(__instance, Game1.player);
@@ -644,8 +629,16 @@ namespace MultiRingInfiniteForging
             // Vanilla applies up to 3 gem enchantments per Diamond (the original
             // "MAX_FORGES" constant before our patch).
             const int diamondCapPerCraft = 3;
-            
+
             int forgesLeft = System.Math.Min(diamondCapPerCraft, validForges.Count);
+
+            // Honor the configured total-forge cap too: vanilla bounds its Diamond branch
+            // by GetMaxForges() - GetTotalForgeLevels(), so a finite WeaponForgingCap must
+            // not be exceedable via Diamonds.  With the default -1 (unlimited) GetMaxForges()
+            // is int.MaxValue and this never binds.
+            int remainingCapacity = __instance.GetMaxForges() - __instance.GetTotalForgeLevels();
+            if (forgesLeft > remainingCapacity)
+                forgesLeft = System.Math.Max(0, remainingCapacity);
             ModEntry.DiagVerbose("[Test] Diamond forge: " + forgesLeft + " forges available on " + __instance.Name);
 
             for (int i = 0; i < forgesLeft; i++)

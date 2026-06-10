@@ -34,6 +34,8 @@ namespace MultiRingInfiniteForging
             Instance.Monitor.Log(message, LogLevel.Trace);
         }
 
+        /// <summary>Legacy SMAPI save-data key used by versions before 1.1.0; only read by
+        /// the one-time migration into Farmer.modData (see RingSlotManager.MigrateLegacySaveData).</summary>
         public const string SaveKey = "ExtraRings";
 
         public override void Entry(IModHelper helper)
@@ -76,10 +78,12 @@ namespace MultiRingInfiniteForging
             helper.Events.GameLoop.GameLaunched += OnGameLaunched;
             helper.Events.GameLoop.SaveLoaded += OnSaveLoaded;
             helper.Events.GameLoop.Saving += OnSaving;
-            helper.Events.GameLoop.DayEnding += OnDayEnding;
+            helper.Events.GameLoop.Saved += OnSaved;
+            helper.Events.GameLoop.ReturnedToTitle += OnReturnedToTitle;
             helper.Events.GameLoop.UpdateTicked += OnUpdateTicked;
             helper.Events.GameLoop.OneSecondUpdateTicked += OnOneSecondTick;
             helper.Events.Player.Warped += OnWarped;
+            helper.Events.Display.MenuChanged += OnMenuChanged;
             helper.Events.Input.ButtonPressed += OnButtonPressed;
 
             var harmony = new Harmony(ModManifest.UniqueID);
@@ -197,7 +201,7 @@ namespace MultiRingInfiniteForging
                 save: () =>
                 {
                     Helper.WriteConfig(Config);
-                    RingSlotManager.EnsureSize();  // <-- ensure this is present
+                    RingSlotManager.EnsureSize();
                 });
 
             // Optional cross-mod compatibility patches that must run after all mods have
@@ -222,8 +226,6 @@ namespace MultiRingInfiniteForging
             RingSlotManager.HandleWarp(e.Player, e.OldLocation, e.NewLocation);
         }
         
-        /// <summary>Periodic diagnostic snapshot of the player's combined buff state.
-        /// Used to verify that extra-slot rings are flowing through AddEquipmentEffects.</summary>
         /// <summary>Periodic diagnostic snapshot of the player's combined buff state.
         /// Mirrors the mrif_stats console command but at a per-second cadence.  Only
         /// emitted when VerboseLogging is enabled in the config — so by default this
@@ -330,6 +332,8 @@ namespace MultiRingInfiniteForging
 
         private void OnSaveLoaded(object? sender, SaveLoadedEventArgs e)
         {
+            // Every player — host or farmhand — loads their own rings from their Farmer's
+            // modData (per-player, net-synced, saved by the host).
             RingSlotManager.Load(Helper);
             RingSlotManager.ApplyAllEffects();
         }
@@ -337,12 +341,44 @@ namespace MultiRingInfiniteForging
         private void OnSaving(object? sender, SavingEventArgs e)
         {
             RingSlotManager.RemoveAllEffects();
-            RingSlotManager.Save(Helper);
+            // Belt-and-suspenders: state is already written through on every mutation.
+            RingSlotManager.Persist();
         }
 
-        private void OnDayEnding(object? sender, DayEndingEventArgs e)
+        /// <summary>Re-apply ring effects after the overnight save completes.  OnSaving
+        /// removes them (onUnequip kills light sources and nulls Ring.lightSourceId), and
+        /// Ring.update can't restore a null light — without this, extra-slot Glow/Iridium/
+        /// Glowstone rings stayed dark every morning until the first warp re-created the
+        /// light via onNewLocation.</summary>
+        private void OnSaved(object? sender, SavedEventArgs e)
         {
-            RingSlotManager.Save(Helper);
+            RingSlotManager.ApplyAllEffects();
+        }
+
+        /// <summary>Clear in-memory slot state when leaving a save, so a stale session's
+        /// rings can't leak into title-screen GMCM callbacks (EnsureSize/Drain against a
+        /// stale Game1.player) or into a different save loaded next.</summary>
+        private void OnReturnedToTitle(object? sender, ReturnedToTitleEventArgs e)
+        {
+            RingSlotManager.Clear();
+        }
+
+        /// <summary>Our forge panel moves items via Game1.player.CursorSlotItem, which
+        /// vanilla's ForgeMenu close path doesn't know about (readyToClose only checks its
+        /// private _heldItem).  If the forge closes while our cursor carry is occupied, the
+        /// item would ride along invisibly until the next inventory menu — return it to the
+        /// player instead.</summary>
+        private void OnMenuChanged(object? sender, MenuChangedEventArgs e)
+        {
+            if (e.OldMenu is not ForgeMenu || e.NewMenu is ForgeMenu) return;
+            var carried = Game1.player?.CursorSlotItem;
+            if (carried == null) return;
+
+            Game1.player!.CursorSlotItem = null;
+            var leftover = Game1.player.addItemToInventory(carried);
+            if (leftover != null && Game1.player.currentLocation != null)
+                Game1.createItemDebris(leftover, Game1.player.Position, -1, Game1.player.currentLocation);
+            Diag($"Returned '{carried.Name}' from the cursor to the player on forge close.");
         }
     }
 }

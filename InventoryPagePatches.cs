@@ -29,7 +29,6 @@ namespace MultiRingInfiniteForging
         private static readonly List<ClickableComponent> Slots = new();
         private static ClickableTextureComponent? ToggleButton;
         private static bool _panelOpen;
-        private static bool _userPanelOpen;
         private static int _scrollOffset;
         private static int _maxScrollOffset;
         private static int _visibleRows;
@@ -80,6 +79,10 @@ namespace MultiRingInfiniteForging
         public static bool ScrollWheel_Prefix(int direction)
         {
             if (!_panelOpen || ToggleButton == null || _maxScrollOffset <= 0) return true;
+            // The panel state statics outlive the menu (nothing resets them on close) —
+            // never intercept scrolling unless the inventory tab is actually on screen.
+            if (Game1.activeClickableMenu is not GameMenu activeGm
+                || activeGm.currentTab != GameMenu.inventoryTab) return true;
 
             var mousePos = Game1.getMousePosition();
             var panelBounds = GetPanelBackground();
@@ -720,7 +723,6 @@ namespace MultiRingInfiniteForging
         public static void TogglePanel(bool playSound)
         {
             _panelOpen = !_panelOpen;
-            _userPanelOpen = _panelOpen;
             ModEntry.DiagVerbose("[Test] Inventory panel toggled: open=" + _panelOpen);
             ApplyPanelVisibility();
             if (playSound) Game1.playSound(_panelOpen ? "bigSelect" : "bigDeSelect");
@@ -758,7 +760,10 @@ namespace MultiRingInfiniteForging
                 var page = gm?.pages[GameMenu.inventoryTab] as InventoryPage;
                 if (page != null)
                 {
-                    bool wasOpen = _userPanelOpen;
+                    // Preserve the panel state the user is actually looking at (each menu
+                    // open resets _panelOpen to false; restoring a remembered "user opened
+                    // it once" flag here would pop the panel open on a window resize).
+                    bool wasOpen = _panelOpen;
                     _panelOpen = true;
                     page.equipmentIcons.RemoveAll(c =>
                         c.name.StartsWith("ExtraRing") || c.name == "ExtraRingToggle");
