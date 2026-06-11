@@ -202,6 +202,9 @@ namespace MultiRingInfiniteForging
                 {
                     Helper.WriteConfig(Config);
                     RingSlotManager.EnsureSize();
+                    // Config flips change the forge highlight/dim verdicts — drop the memos.
+                    Patches.InvalidateHighlightCache();
+                    ForgeMenuPatches.InvalidateDimCache();
                 });
 
             // Optional cross-mod compatibility patches that must run after all mods have
@@ -367,6 +370,9 @@ namespace MultiRingInfiniteForging
         private void OnReturnedToTitle(object? sender, ReturnedToTitleEventArgs e)
         {
             RingSlotManager.Clear();
+            // The forge memos hold Item references from the closed save.
+            Patches.ClearSessionCaches();
+            ForgeMenuPatches.ClearSessionCaches();
         }
 
         /// <summary>Our forge panel moves items via Game1.player.CursorSlotItem, which

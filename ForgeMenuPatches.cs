@@ -30,6 +30,9 @@ namespace MultiRingInfiniteForging
 
         private static void TestLogOnce(string message)
         {
+            // Gate before the set: with verbose logging off, growing the dedup set is
+            // pure waste, and some call sites sit in per-frame or per-probe paths.
+            if (!ModEntry.Instance.Config.VerboseLogging) return;
             if (_testLogOnce.Add(message))
                 ModEntry.DiagVerbose("[Test] " + message);
         }
@@ -71,6 +74,15 @@ namespace MultiRingInfiniteForging
             public string? LastUpdateRightName;
             public List<string>? PreForgeCombinedRingNames;
             public bool LastLeftWasRing;
+
+            // Draw-path dim memo: IsRingAllowedInForgeContext verdict per panel ring,
+            // plus the pair-level duplicate check DrawCombinedRingGlow needs.  Keyed by
+            // the forge ingredient pair (reference identity); revalidated on every
+            // lookup, dropped on menu open and config change.
+            public readonly Dictionary<Ring, bool> DimAllowed = new();
+            public Item? DimLeft;
+            public Item? DimRight;
+            public bool PairDuplicate;
         }
 
         private static readonly PerScreen<PanelState> StatePerScreen = new(() => new PanelState());
@@ -566,6 +578,10 @@ namespace MultiRingInfiniteForging
             _testLogOnce.Clear();
             _panelOpen = false;
             _scrollOffset = 0;
+            // Fresh menu: drop the highlight/dim memos so nothing from the previous
+            // menu (or a config edit made in between) leaks into this one.
+            InvalidateDimCache();
+            Patches.InvalidateHighlightCache();
             RebuildSlots(__instance);
 
             if (ToggleButton != null)
@@ -636,15 +652,6 @@ namespace MultiRingInfiniteForging
                         slotsBg.Width + 32, slotsBg.Height + 32,
                         ForgePanelTint, 1f, drawShadow: true);
 
-                    bool nonRingInSlot =
-                        (__instance.leftIngredientSpot.item  != null && __instance.leftIngredientSpot.item  is not Ring) ||
-                        (__instance.rightIngredientSpot.item != null && __instance.rightIngredientSpot.item is not Ring);
-                    if (nonRingInSlot)
-                        TestLogOnce("Forge draw: panel slots dimmed by non-ring in forge");
-
-                    var forgeLeftRing  = __instance.leftIngredientSpot.item  as Ring;
-                    var forgeRightRing = __instance.rightIngredientSpot.item as Ring;
-
                     foreach (var slot in Slots)
                     {
                         int idx = SlotIndex(slot);
@@ -662,41 +669,10 @@ namespace MultiRingInfiniteForging
 
                         if (ring != null)
                         {
-                            bool blocked = nonRingInSlot;
-
-                            if (!blocked && !ModEntry.Instance.Config.InfiniteCombining)
-                            {
-                                if (forgeLeftRing != null && !IsValidCraft(__instance, forgeLeftRing, ring))
-                                {
-                                    TestLogOnce("Forge draw: panel slot dimmed by invalid craft (left)");
-                                    blocked = true;
-                                }
-                                else if (forgeRightRing != null && forgeLeftRing == null && !IsValidCraft(__instance, ring, forgeRightRing))
-                                {
-                                    TestLogOnce("Forge draw: panel slot dimmed by invalid craft (right)");
-                                    blocked = true;
-                                }
-                            }
-
-                            if (!blocked
-                                && ModEntry.Instance.Config.AddCombinedDuplicateRingCap
-                                && ModEntry.Instance.Config.InfiniteCombining)
-                            {
-                                // Dim if placing this panel ring into either forge slot would create a duplicate.
-                                if (forgeLeftRing != null && Patches.WouldCreateDuplicateRing(forgeLeftRing, ring))
-                                {
-                                    TestLogOnce("Forge draw: panel slot dimmed by duplicate cap (left)");
-                                    blocked = true;
-                                }
-                                else if (forgeRightRing != null && Patches.WouldCreateDuplicateRing(forgeRightRing, ring))
-                                {
-                                    TestLogOnce("Forge draw: panel slot dimmed by duplicate cap (right)");
-                                    blocked = true;
-                                }
-
-                            }
-
-                            TestLogOnce($"Forge draw: panel slot {idx} {ring.Name} {(blocked ? "dimmed" : "allowed")}");
+                            // Dim rings the forge context refuses (non-ring ingredient in a
+                            // slot, invalid craft, duplicate cap).  Verdicts are memoized per
+                            // ingredient pair — this runs for every panel slot every frame.
+                            bool blocked = !IsRingAllowedCached(ring, __instance);
 
                             if (blocked)
                             {
@@ -809,7 +785,7 @@ namespace MultiRingInfiniteForging
                 && !menu.IsBusy()
                 && ModEntry.Instance.Config.AddCombinedDuplicateRingCap
                 && leftRing != null && rightRing != null
-                && Patches.WouldCreateDuplicateRing(leftRing, rightRing))
+                && RevalidateDimMemo(menu).PairDuplicate)
             {
                 if (menu.leftIngredientSpot.item == null)
                     menu.leftIngredientSpot.draw(b, Color.White, 0.87f);
@@ -1734,6 +1710,11 @@ namespace MultiRingInfiniteForging
         // (Trackers live in PanelState so each split-screen player detects their own.)
         public static void Update_Postfix(ForgeMenu __instance)
         {
+            // Everything below is diagnostics (forge-completion traces).  Skip the whole
+            // body — including the per-tick held-item reflection and the CombinedRing
+            // name materialization — unless verbose logging is on.
+            if (!ModEntry.Instance.Config.VerboseLogging) return;
+
             var held = GetHeldItem(__instance);
             var heldName = held?.Name ?? "null";
 
@@ -1829,6 +1810,60 @@ namespace MultiRingInfiniteForging
             }
 
             return true;
+        }
+
+        /// <summary>Revalidate this screen's dim memo against the current ingredient pair
+        /// (reference identity), clearing it when the pair changed, and refresh the
+        /// pair-level duplicate flag.  Returns the state for further lookups.</summary>
+        private static PanelState RevalidateDimMemo(ForgeMenu menu)
+        {
+            var st = StatePerScreen.Value;
+            Item? left = menu.leftIngredientSpot.item;
+            Item? right = menu.rightIngredientSpot.item;
+            if (!ReferenceEquals(left, st.DimLeft) || !ReferenceEquals(right, st.DimRight))
+            {
+                st.DimAllowed.Clear();
+                st.DimLeft = left;
+                st.DimRight = right;
+                st.PairDuplicate = left is Ring leftRing && right is Ring rightRing
+                    && Patches.WouldCreateDuplicateRing(leftRing, rightRing);
+            }
+            return st;
+        }
+
+        /// <summary>Memoized <see cref="IsRingAllowedInForgeContext"/> for the draw path,
+        /// which asks once per panel ring per frame.  The underlying checks probe
+        /// CanForge/CanCombine and walk CombinedRing trees — recomputing those 60×/s per
+        /// slot is the waste this avoids.  Click handlers keep calling the uncached
+        /// helper directly.</summary>
+        private static bool IsRingAllowedCached(Ring ring, ForgeMenu menu)
+        {
+            var st = RevalidateDimMemo(menu);
+            if (!st.DimAllowed.TryGetValue(ring, out bool allowed))
+                st.DimAllowed[ring] = allowed = IsRingAllowedInForgeContext(ring, menu);
+            return allowed;
+        }
+
+        /// <summary>Drop the dim memos on every screen.  Call when something outside the
+        /// ingredient-pair key can change the verdicts — config edits, menu construction,
+        /// returning to title.</summary>
+        internal static void InvalidateDimCache()
+        {
+            foreach (var pair in StatePerScreen.GetActiveValues())
+            {
+                pair.Value.DimAllowed.Clear();
+                pair.Value.DimLeft = null;
+                pair.Value.DimRight = null;
+                pair.Value.PairDuplicate = false;
+            }
+        }
+
+        /// <summary>Session cleanup on return to title: the dim memo holds Ring references
+        /// from the closed save, and the log-dedup set is save-scoped noise.</summary>
+        internal static void ClearSessionCaches()
+        {
+            InvalidateDimCache();
+            _testLogOnce.Clear();
         }
 
         /// <summary>Vanilla's left-slot rule (ForgeMenu._leftIngredientSpotClicked): any
@@ -2285,7 +2320,7 @@ namespace MultiRingInfiniteForging
         /// </summary>
         /// <param name="menu">The ForgeMenu instance to get the held item from.</param>
         /// <return>The held Item if accessible, otherwise null.</return>
-        private static Item? GetHeldItem(ForgeMenu menu) =>
+        internal static Item? GetHeldItem(ForgeMenu menu) =>
             HeldItemField?.GetValue(menu) as Item;
 
         /// <summary>Sets the held item in the forge menu by updating the private _heldItem field via reflection.</summary>

@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using HarmonyLib;
 using StardewModdingAPI;
+using StardewModdingAPI.Utilities;
 using StardewValley;
 using StardewValley.Enchantments;
 using StardewValley.Menus;
@@ -18,8 +19,52 @@ namespace MultiRingInfiniteForging
 
         private static void TestLogOnce(string message)
         {
+            // Gate before the set: with verbose logging off, growing the dedup set is
+            // pure waste, and some call sites sit in per-frame or per-probe paths.
+            if (!ModEntry.Instance.Config.VerboseLogging) return;
             if (_testLogOnce.Add(message))
                 ModEntry.DiagVerbose("[Test] " + message);
+        }
+
+        /// <summary>Per-screen memo for <see cref="Forge_HighlightItems_Postfix"/>.
+        /// Vanilla caches HighlightItems verdicts in ForgeMenu._highlightDictionary and
+        /// only regenerates them on slot changes, but a Harmony postfix runs on every
+        /// call — InventoryMenu.draw asks 2-3 times per inventory slot per frame.
+        /// Recomputing our adjustments at that rate (CanForge/CanCombine probes,
+        /// enchantment-pool lookups, duplicate-cap walks) burns CPU and allocates, so
+        /// mirror vanilla: remember the final verdict per item and drop everything when
+        /// the ingredient pair or vanilla's held item changes (reference identity —
+        /// crafts and clicks always swap the instances).</summary>
+        private sealed class HighlightMemo
+        {
+            public readonly Dictionary<Item, bool> Verdicts = new();
+            public Item? Left;
+            public Item? Right;
+            public Item? Held;
+        }
+
+        private static readonly PerScreen<HighlightMemo> HighlightMemoPerScreen = new(() => new HighlightMemo());
+
+        /// <summary>Drop the highlight memos on every screen.  Call when something outside
+        /// the (left, right, held) key can change the verdicts — config edits, menu
+        /// construction, returning to title.</summary>
+        internal static void InvalidateHighlightCache()
+        {
+            foreach (var pair in HighlightMemoPerScreen.GetActiveValues())
+            {
+                pair.Value.Verdicts.Clear();
+                pair.Value.Left = null;
+                pair.Value.Right = null;
+                pair.Value.Held = null;
+            }
+        }
+
+        /// <summary>Session cleanup on return to title: the memo holds Item references
+        /// from the closed save, and the log-dedup set is save-scoped noise.</summary>
+        internal static void ClearSessionCaches()
+        {
+            InvalidateHighlightCache();
+            _testLogOnce.Clear();
         }
 
         public static void ApplyAll(Harmony harmony, IMonitor monitor)
@@ -387,24 +432,50 @@ namespace MultiRingInfiniteForging
             return result;
         }
 
-        /// <summary>Diagnostic + functional postfix on ForgeMenu.HighlightItems.
-        /// Logs each call so we can verify the patch is active, then (when the left
-        /// ingredient is a Ring) tightens the result so only Rings and Prismatic
-        /// Shards are highlighted.</summary>
+        /// <summary>Functional postfix on ForgeMenu.HighlightItems: when the left
+        /// ingredient is a Ring/Tool (or the slots are empty), adjusts which inventory
+        /// items light up to match this mod's craft rules.  The verdicts are memoized —
+        /// see <see cref="HighlightMemo"/> — because this postfix runs on every
+        /// HighlightItems call, several times per inventory slot per frame, while the
+        /// inputs only change when a forge slot or the held item does.</summary>
         public static void Forge_HighlightItems_Postfix(ForgeMenu __instance, Item i, ref bool __result)
         {
             if (i == null) return;
 
+            var memo = HighlightMemoPerScreen.Value;
+            Item? left  = __instance.leftIngredientSpot.item;
+            Item? right = __instance.rightIngredientSpot.item;
+            Item? held  = ForgeMenuPatches.GetHeldItem(__instance);
+            if (!ReferenceEquals(left, memo.Left)
+                || !ReferenceEquals(right, memo.Right)
+                || !ReferenceEquals(held, memo.Held))
+            {
+                memo.Verdicts.Clear();
+                memo.Left = left;
+                memo.Right = right;
+                memo.Held = held;
+            }
+
+            if (memo.Verdicts.TryGetValue(i, out bool cached))
+            {
+                __result = cached;
+                return;
+            }
+
+            __result = ComputeHighlight(__instance, i, left, right, __result);
+            memo.Verdicts[i] = __result;
+        }
+
+        /// <summary>The actual highlight adjustments, as a pure function of the queried
+        /// item, the ingredient slots, and vanilla's verdict.</summary>
+        private static bool ComputeHighlight(ForgeMenu menu, Item i, Item? leftItem, Item? rightItem, bool result)
+        {
             // Scythes can't be forged or enchanted — always dim them.
             if (i is MeleeWeapon scytheCheck && !IsScytheForgingAllowed(scytheCheck))
             {
                 TestLogOnce("HighlightItems: scythe blocked (" + scytheCheck.Name + ")");
-                __result = false;
-                return;
+                return false;
             }
-
-            Item? leftItem  = __instance.leftIngredientSpot.item;
-            Item? rightItem = __instance.rightIngredientSpot.item;
 
             // Case 1: Ring in left slot.  Highlight only rings that would form
             // a valid ring+ring combine with the left ring.  Without InfiniteCombining,
@@ -416,11 +487,10 @@ namespace MultiRingInfiniteForging
                 if (i is not Ring)
                 {
                     TestLogOnce("HighlightItems: ring in left slot, non-ring " + i.Name + " dimmed");
-                    __result = false;
-                    return;
+                    return false;
                 }
 
-                bool valid = ForgeMenuPatches.IsValidCraft(__instance, leftItem, i);
+                bool valid = ForgeMenuPatches.IsValidCraft(menu, leftItem, i);
 
                 if (valid
                     && ModEntry.Instance.Config.AddCombinedDuplicateRingCap
@@ -432,15 +502,14 @@ namespace MultiRingInfiniteForging
                 }
 
                 TestLogOnce("HighlightItems: ring in left slot, " + i.Name + " → " + (valid ? "highlighted" : "dimmed"));
-                __result = valid;
-                return;
+                return valid;
             }
 
             // Case 2: any Tool in the left slot (weapons, slingshots, and regular tools —
             // vanilla has no upgrade-level requirement; base tools are enchantable).
             if (leftItem is Tool)
             {
-                bool valid = ForgeMenuPatches.IsValidCraft(__instance, leftItem, i);
+                bool valid = ForgeMenuPatches.IsValidCraft(menu, leftItem, i);
 
                 // Demote: dim items that would produce a no-op craft (e.g. Diamond
                 // on a tool that already has all 6 gem enchantments).
@@ -467,8 +536,7 @@ namespace MultiRingInfiniteForging
                 }
 
                 TestLogOnce("HighlightItems: tool in left slot, " + i.Name + " → " + (valid ? "highlighted" : "dimmed"));
-                __result = valid;
-                return;
+                return valid;
             }
 
             // Case 3: Left slot empty, but RIGHT slot has an item.  Vanilla doesn't
@@ -477,7 +545,7 @@ namespace MultiRingInfiniteForging
             // existing right ingredient.
             if (leftItem == null && rightItem != null)
             {
-                bool valid = ForgeMenuPatches.IsValidCraft(__instance, i, rightItem);
+                bool valid = ForgeMenuPatches.IsValidCraft(menu, i, rightItem);
 
                 // Demote: no-op craft.
                 if (valid && i is Tool prospectiveLeftToolDemote
@@ -496,8 +564,7 @@ namespace MultiRingInfiniteForging
                 }
 
                 TestLogOnce("HighlightItems: right slot occupied, " + i.Name + " → " + (valid ? "highlighted" : "dimmed"));
-                __result = valid;
-                return;
+                return valid;
             }
 
             // Case 4: Both forge slots empty.  Vanilla refuses to highlight a Tool whose
@@ -506,16 +573,18 @@ namespace MultiRingInfiniteForging
             // a fully-enchanted tool from inventory to forge more gems onto it.
             // Override: a tool/weapon/ring is always pickable when the forge is empty;
             // the right-slot drop logic handles refusing no-op crafts later.
-            if (leftItem == null && rightItem == null && !__result)
+            if (leftItem == null && rightItem == null && !result)
             {
                 // Any Tool or Ring (scythes were already dimmed by the check at the top;
                 // vanilla has no upgrade-level requirement for tools).
                 if (i is Ring || i is Tool)
                 {
                     TestLogOnce("HighlightItems: both empty, re-enabled " + i.Name);
-                    __result = true;
+                    return true;
                 }
             }
+
+            return result;
         }
         
         // ============================================================
