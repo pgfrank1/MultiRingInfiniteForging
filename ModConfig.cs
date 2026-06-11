@@ -28,7 +28,7 @@
         /// <summary>Dragon Tooth adds the innate enchantment on top of existing ones
         /// instead of vanilla's replace-and-re-roll.  Forging the same type again levels
         /// it up (+1), capped at the game's per-type maximum.</summary>
-        public bool DragonToothStacking { get; set; } = false;
+        public bool DragonToothStacking { get; set; } = true;
 
         /// <summary>Innate enchantments applied by Dragon Tooth always land at their
         /// maximum level (GetMaximumLevel) instead of a rolled level, and each craft

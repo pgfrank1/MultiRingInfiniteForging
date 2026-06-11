@@ -24,7 +24,7 @@ namespace MultiRingInfiniteForging
                     config.WeaponForgingCap = -1;
                     config.RemoveDiamondForgesCap = false;
                     config.MultipleEnchantments = true;
-                    config.DragonToothStacking = false;
+                    config.DragonToothStacking = true;
                     config.AlwaysMaxDragonToothStat = true;
                     config.ForgeMenuChoiceIntegration = true;
                     config.VerboseLogging = false;
