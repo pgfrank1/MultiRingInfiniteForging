@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using HarmonyLib;
 using StardewModdingAPI;
 using StardewValley;
+using StardewValley.Enchantments;
 using StardewValley.Menus;
 using StardewValley.Monsters;
 using StardewValley.Objects;
@@ -326,10 +327,19 @@ namespace MultiRingInfiniteForging
 
         public static void Forge_IsValidCraft_Postfix(Item left_item, Item right_item, ref bool __result)
         {
+            __result = ApplyCraftOverrides(left_item, right_item, __result);
+        }
+
+        /// <summary>This mod's IsValidCraft overrides as a pure function: takes the vanilla
+        /// (or earlier-patch) verdict and returns the adjusted one.  Shared between the real
+        /// Harmony postfix above and <see cref="ForgeMenuPatches.IsValidCraft"/>, our
+        /// side-effect-free evaluator used for per-frame highlight/drop probing.</summary>
+        internal static bool ApplyCraftOverrides(Item? left_item, Item? right_item, bool result)
+        {
             // Override 1: Infinite ring combining.  Allow ring+ring even when vanilla
             // refuses (which it does once one of the rings is already combined or both
             // are already at the cap).  This must run regardless of the incoming
-            // __result, since vanilla's answer for these pairs is "false".
+            // result, since vanilla's answer for these pairs is "false".
             if (ModEntry.Instance.Config.InfiniteCombining
                 && left_item is Ring leftRing && right_item is Ring rightRing)
             {
@@ -340,42 +350,41 @@ namespace MultiRingInfiniteForging
                     && WouldCreateDuplicateRing(leftRing, rightRing))
                 {
                     TestLogOnce("IsValidCraft: infinite combining BLOCKED (duplicate cap)");
-                    __result = false;
-                    return;
+                    return false;
                 }
                 TestLogOnce("IsValidCraft: infinite combining ALLOWED: " + leftRing.Name + " + " + rightRing.Name);
-                __result = true;
-                return;
+                return true;
             }
 
             // Override 2: Block no-op tool crafts (e.g. Diamond on a tool that already
             // has all 6 gem enchantments, Prismatic Shard on a fully-enchanted tool).
             // Only relevant when vanilla originally said "yes" — if it already said "no",
             // there's nothing for us to suppress.
-            if (__result
+            if (result
                 && left_item is Tool leftToolDemote
                 && right_item != null
                 && !ForgeMenuPatches.CanRightItemEnchantTool(leftToolDemote, right_item))
             {
                 TestLogOnce("IsValidCraft: demoted to false (no-op craft) for " + leftToolDemote.Name + " + " + right_item.Name);
-                __result = false;
-                return;
+                return false;
             }
-            
+
             // Override 3: Allow tool crafts vanilla refused but our mod can handle.
             // With MultipleEnchantments=false, a Prismatic Shard on a fully-enchanted
             // tool is valid in our world because vanilla's AddEnchantment clears the
             // existing tool enchantment before re-applying.  Vanilla refuses because
             // GetEnchantmentFromItem returns null, but our CanRightItemEnchantTool
             // knows the craft will produce a result after the clear+reapply.
-            if (!__result
+            if (!result
                 && left_item is Tool leftToolPromote
                 && right_item != null
                 && ForgeMenuPatches.CanRightItemEnchantTool(leftToolPromote, right_item))
             {
                 TestLogOnce("IsValidCraft: promoted to true (re-roll) for " + leftToolPromote.Name + " + " + right_item.Name);
-                __result = true;
+                return true;
             }
+
+            return result;
         }
 
         /// <summary>Diagnostic + functional postfix on ForgeMenu.HighlightItems.
@@ -427,9 +436,9 @@ namespace MultiRingInfiniteForging
                 return;
             }
 
-            // Case 2: Weapon/Slingshot/Tool in left slot.
-            if (leftItem is MeleeWeapon || leftItem is Slingshot
-                                        || (leftItem is Tool t && t.UpgradeLevel > 0))
+            // Case 2: any Tool in the left slot (weapons, slingshots, and regular tools —
+            // vanilla has no upgrade-level requirement; base tools are enchantable).
+            if (leftItem is Tool)
             {
                 bool valid = ForgeMenuPatches.IsValidCraft(__instance, leftItem, i);
 
@@ -499,10 +508,9 @@ namespace MultiRingInfiniteForging
             // the right-slot drop logic handles refusing no-op crafts later.
             if (leftItem == null && rightItem == null && !__result)
             {
-                if (i is Ring
-                    || i is MeleeWeapon
-                    || i is Slingshot
-                    || (i is Tool tool && tool.UpgradeLevel > 0))
+                // Any Tool or Ring (scythes were already dimmed by the check at the top;
+                // vanilla has no upgrade-level requirement for tools).
+                if (i is Ring || i is Tool)
                 {
                     TestLogOnce("HighlightItems: both empty, re-enabled " + i.Name);
                     __result = true;
@@ -711,7 +719,7 @@ namespace MultiRingInfiniteForging
         /// secondary enchantments like Vampiric return IsSecondaryEnchantment()==false
         /// and are preserved automatically.</summary>
         public static bool Tool_Forge_DragonToothReroll_Prefix(
-            Tool __instance, Item item, ref bool __result)
+            Tool __instance, Item item, bool count_towards_stats, ref bool __result)
         {
             if (item?.QualifiedItemId != "(O)852")
                 return true; // not a Dragon Tooth — let vanilla handle
@@ -723,31 +731,108 @@ namespace MultiRingInfiniteForging
                 return true;
             }
 
-            // For non-Galaxy weapons below level 15, vanilla's existing path works
-            // correctly — leave it alone.
-            if (!weapon.Name.Contains("Galaxy") && weapon.getItemLevel() < 15)
+            // count_towards_stats is vanilla's forReal: the forge's result-preview box
+            // crafts CLONES with forReal=false on every _ValidateCraft (so this prefix
+            // runs once per slot change, on a copy).  Previews must never consume the
+            // Forge Menu Choice selection, and their traces would drown the log.
+            bool isRealCraft = count_towards_stats;
+
+            bool stacking = ModEntry.Instance.Config.DragonToothStacking;
+            bool alwaysMax = ModEntry.Instance.Config.AlwaysMaxDragonToothStat;
+
+            // Plain vanilla-eligible re-rolls (below level 15, non-Galaxy, no option that
+            // changes the semantics) stay with vanilla's path — including Forge Menu
+            // Choice's own selection transpiler inside it.
+            bool vanillaEligible = !weapon.Name.Contains("Galaxy") && weapon.getItemLevel() < 15;
+            if (vanillaEligible && !stacking && !alwaysMax)
             {
                 ModEntry.DiagVerbose("[Test] Dragon Tooth: non-Galaxy below level 15, passing to vanilla");
                 return true;
             }
 
-            // Mod extension: Galaxy/Infinity weapons.  Replicate vanilla's behaviour
-            // here since vanilla's CanForge refuses.
-            List<StardewValley.Enchantments.BaseEnchantment> oldInnate = new();
-            for (int i = weapon.enchantments.Count - 1; i >= 0; i--)
+            // We own the craft: Galaxy/Infinity weapons (vanilla's CanForge refuses them),
+            // and all weapons once stacking/always-max change the rules.
+            if (isRealCraft)
             {
-                var ench = weapon.enchantments[i];
-                if (ench.IsSecondaryEnchantment()
-                    && ench is not StardewValley.Enchantments.GalaxySoulEnchantment)
+                ModEntry.DiagVerbose(
+                    "[Test] Dragon Tooth craft on " + weapon.Name
+                    + ": stacking=" + stacking + ", alwaysMax=" + alwaysMax
+                    + ", vanillaEligible=" + vanillaEligible);
+            }
+            List<BaseEnchantment> oldInnate = new();
+            if (!stacking)
+            {
+                // Vanilla re-roll semantics: strip the existing innate stat enchantments.
+                // Named secondaries (Galaxy Souls) are always preserved.
+                for (int i = weapon.enchantments.Count - 1; i >= 0; i--)
                 {
-                    oldInnate.Add(ench);
-                    ench.UnapplyTo(weapon);
-                    weapon.enchantments.RemoveAt(i);
+                    var ench = weapon.enchantments[i];
+                    if (ench.IsSecondaryEnchantment()
+                        && ench is not GalaxySoulEnchantment)
+                    {
+                        oldInnate.Add(ench);
+                        ench.UnapplyTo(weapon);
+                        weapon.enchantments.RemoveAt(i);
+                    }
                 }
             }
 
-            MeleeWeapon.attemptAddRandomInnateEnchantment(
-                weapon, Game1.random, force: true, oldInnate);
+            // Forge Menu Choice integration: when its innate carousel is open for this
+            // weapon (opened by FMC itself for vanilla-eligible weapons, or by our
+            // ForgeMenuChoiceCompat prefix for the crafts FMC's gate excludes), honor the
+            // player's selection.  Otherwise roll randomly, like vanilla.  Previews never
+            // touch the selection — the clone is crafted with a silent random roll.
+            var selected = isRealCraft ? ForgeMenuChoiceCompat.TakeCurrentSelection(weapon) : null;
+            if (selected != null)
+            {
+                ModEntry.DiagVerbose("[Test] Dragon Tooth: applying Forge Menu Choice selection " + selected.GetType().Name);
+                ApplyInnateEnchantment(weapon, selected, alwaysMax);
+            }
+            else if (!stacking)
+            {
+                // Random re-roll via vanilla's roller (it re-rolls away from the
+                // just-stripped types).
+                MeleeWeapon.attemptAddRandomInnateEnchantment(
+                    weapon, Game1.random, force: true, oldInnate);
+                if (isRealCraft)
+                    ModEntry.DiagVerbose("[Test] Dragon Tooth: random re-roll applied" + (alwaysMax ? " (maxing levels)" : ""));
+            }
+            else
+            {
+                // Stacking + random: roll among innate types still below their cap so the
+                // tooth is never wasted on an at-max type.
+                var rolled = RollStackableInnate(weapon);
+                if (rolled != null)
+                {
+                    if (isRealCraft)
+                        ModEntry.DiagVerbose("[Test] Dragon Tooth: stacking random roll " + rolled.GetType().Name);
+                    ApplyInnateEnchantment(weapon, rolled, alwaysMax, quiet: !isRealCraft);
+                }
+            }
+
+            if (alwaysMax)
+            {
+                // "Always max" promises max innate STATS, not just a maxed pick: raise
+                // every innate stat enchantment on the weapon to its per-type cap.
+                // Without this, innates that were already on the weapon (spawn rolls, or
+                // crafts made before the option was enabled) stay sub-max forever —
+                // stacking mode never strips them.  Galaxy Souls are named secondaries,
+                // not stats; leveling those would hand out free Infinity progress.
+                foreach (var ench in weapon.enchantments)
+                {
+                    if (ench.IsSecondaryEnchantment()
+                        && ench is not GalaxySoulEnchantment
+                        && ench.GetMaximumLevel() >= 0
+                        && ench.GetLevel() < ench.GetMaximumLevel())
+                    {
+                        ench.SetLevel(weapon, ench.GetMaximumLevel());
+                        if (isRealCraft)
+                            ModEntry.DiagVerbose(
+                                "[Test] Dragon Tooth: always-max raised existing "
+                                + ench.GetType().Name + " → level " + ench.GetLevel() + " (max)");
+                    }
+                }
+            }
 
             __result = true;
             return false; // skip vanilla
@@ -761,6 +846,115 @@ namespace MultiRingInfiniteForging
         /// are always allowed; scythes require an optional scythe-forging mod.</summary>
         public static bool IsScytheForgingAllowed(MeleeWeapon weapon) =>
             !weapon.isScythe() || ModEntry.HasEnchantableScythes || ModEntry.HasScytheToolEnchantments;
+
+        // ---------- Dragon Tooth innate-enchantment helpers ----------
+
+        /// <summary>The innate enchantment types vanilla's Dragon Tooth roller can produce
+        /// for this weapon (mirrors attemptAddRandomInnateEnchantment's option set; Defense
+        /// only rolls at weapon level &lt;= 10).</summary>
+        internal static IEnumerable<Type> InnateCandidateTypes(MeleeWeapon weapon)
+        {
+            if (weapon.getItemLevel() <= 10)
+                yield return typeof(DefenseEnchantment);
+            yield return typeof(LightweightEnchantment);
+            yield return typeof(SlimeGathererEnchantment);
+            yield return typeof(AttackEnchantment);
+            yield return typeof(CritEnchantment);
+            yield return typeof(WeaponSpeedEnchantment);
+            yield return typeof(SlimeSlayerEnchantment);
+            yield return typeof(CritPowerEnchantment);
+        }
+
+        /// <summary>True if the weapon already carries this innate type at its per-type cap
+        /// (BaseEnchantment.GetMaximumLevel — every vanilla innate overrides it).</summary>
+        internal static bool InnateTypeAtMax(MeleeWeapon weapon, Type enchantmentType)
+        {
+            foreach (var ench in weapon.enchantments)
+            {
+                if (ench.GetType() == enchantmentType)
+                    return ench.GetMaximumLevel() >= 0 && ench.GetLevel() >= ench.GetMaximumLevel();
+            }
+            return false;
+        }
+
+        /// <summary>True if at least one innate candidate type still has room to grow —
+        /// used to dim Dragon Tooth crafts that would be no-ops in stacking mode.</summary>
+        internal static bool HasInnateBelowMax(MeleeWeapon weapon)
+        {
+            foreach (var type in InnateCandidateTypes(weapon))
+            {
+                if (!InnateTypeAtMax(weapon, type))
+                    return true;
+            }
+            return false;
+        }
+
+        /// <summary>Apply an innate enchantment with stacking-aware semantics.  If the same
+        /// type is already on the weapon (stacking), level it up (+1) — or jump it to its
+        /// cap with alwaysMax — via SetLevel, which clamps and handles Unapply/Reapply.
+        /// Otherwise add it as a new enchantment (at its cap when alwaysMax).</summary>
+        private static void ApplyInnateEnchantment(MeleeWeapon weapon, BaseEnchantment enchantment, bool alwaysMax, bool quiet = false)
+        {
+            foreach (var existing in weapon.enchantments)
+            {
+                if (existing.GetType() == enchantment.GetType())
+                {
+                    int target = alwaysMax && existing.GetMaximumLevel() >= 0
+                        ? existing.GetMaximumLevel()
+                        : existing.GetLevel() + 1;
+                    existing.SetLevel(weapon, target);
+                    if (!quiet)
+                        ModEntry.DiagVerbose(
+                            "[Test] Dragon Tooth: merged " + enchantment.GetType().Name
+                            + " on " + weapon.Name + " → level " + existing.GetLevel()
+                            + (alwaysMax ? " (max)" : " (+1)"));
+                    return;
+                }
+            }
+
+            if (alwaysMax && enchantment.GetMaximumLevel() >= 0)
+                enchantment.Level = enchantment.GetMaximumLevel();
+            weapon.AddEnchantment(enchantment);
+            if (!quiet)
+                ModEntry.DiagVerbose(
+                    "[Test] Dragon Tooth: added " + enchantment.GetType().Name
+                    + " on " + weapon.Name + " at level " + enchantment.GetLevel()
+                    + (alwaysMax ? " (max)" : ""));
+        }
+
+        /// <summary>Roll a random innate enchantment for stacking mode: vanilla's five main
+        /// roll types with vanilla's level formulas, filtered to types still below their cap
+        /// so the Dragon Tooth is never wasted on an at-max type.  Null when everything is
+        /// capped (the craft should already have been dimmed by then).</summary>
+        private static BaseEnchantment? RollStackableInnate(MeleeWeapon weapon)
+        {
+            int weaponLevel = weapon.getItemLevel();
+            var options = new List<BaseEnchantment>();
+            if (!InnateTypeAtMax(weapon, typeof(AttackEnchantment)))
+                options.Add(new AttackEnchantment
+                {
+                    Level = Math.Max(1, Math.Min(5, Game1.random.Next(weaponLevel + 1) / 2 + 1)),
+                });
+            if (!InnateTypeAtMax(weapon, typeof(CritEnchantment)))
+                options.Add(new CritEnchantment
+                {
+                    Level = Math.Max(1, Math.Min(3, Game1.random.Next(weaponLevel) / 3)),
+                });
+            if (!InnateTypeAtMax(weapon, typeof(WeaponSpeedEnchantment)))
+                options.Add(new WeaponSpeedEnchantment
+                {
+                    Level = Math.Max(1, Math.Min(Math.Max(1, 4 - weapon.speed.Value), Game1.random.Next(weaponLevel))),
+                });
+            if (!InnateTypeAtMax(weapon, typeof(SlimeSlayerEnchantment)))
+                options.Add(new SlimeSlayerEnchantment());
+            if (!InnateTypeAtMax(weapon, typeof(CritPowerEnchantment)))
+                options.Add(new CritPowerEnchantment
+                {
+                    Level = Math.Max(1, Math.Min(3, Game1.random.Next(weaponLevel) / 3)),
+                });
+
+            return options.Count > 0 ? options[Game1.random.Next(options.Count)] : null;
+        }
 
         /// <summary>True if combining <paramref name="a"/> and <paramref name="b"/>
         /// would result in a CombinedRing containing two or more copies of the same

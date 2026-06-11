@@ -37,11 +37,15 @@ namespace MultiRingInfiniteForging
         private static readonly System.Reflection.FieldInfo? HeldItemField =
             AccessTools.Field(typeof(MenuWithInventory), "_heldItem");
 
+        private static readonly System.Reflection.FieldInfo? HighlightDictionaryField =
+            AccessTools.Field(typeof(ForgeMenu), "_highlightDictionary");
+
+        private static readonly System.Reflection.MethodInfo? ValidateCraftMethod =
+            AccessTools.Method(typeof(ForgeMenu), "_ValidateCraft");
+
         private static readonly System.Reflection.MethodInfo? HighlightItemsMethod =
             AccessTools.Method(typeof(ForgeMenu), "HighlightItems");
 
-        private static readonly System.Reflection.MethodInfo? IsValidCraftMethod =
-            AccessTools.Method(typeof(ForgeMenu), "IsValidCraft");
 
         /// <summary>All mutable panel/UI state, one instance per screen.  Split-screen
         /// players each have their own menus, so sharing this across screens made one
@@ -1110,12 +1114,7 @@ namespace MultiRingInfiniteForging
                 {
                     Item? leftExisting = __instance.leftIngredientSpot.item;
 
-                    // Determine if vanilla would allow this item in the left slot.
-                    bool acceptsInLeft =
-                        (carriedAny is StardewValley.Tools.MeleeWeapon mw && Patches.IsScytheForgingAllowed(mw))
-                        || carriedAny is StardewValley.Tools.Slingshot
-                        || (carriedAny is Tool t && t.UpgradeLevel > 0 && t is not StardewValley.Tools.MeleeWeapon)
-                        || carriedAny is Ring;
+                    bool acceptsInLeft = IsAcceptedInLeftSlot(__instance, carriedAny);
 
                     if (!acceptsInLeft)
                     {
@@ -1147,6 +1146,7 @@ namespace MultiRingInfiniteForging
                         }
                         __instance.leftIngredientSpot.item = carriedAny;
                         Game1.player.CursorSlotItem = null;
+                        NotifyForgeSlotsChanged(__instance);
                         ModEntry.DiagVerbose("[Test] Forge drop accepted: " + carriedAny.Name + " → left slot");
                         if (playSound) Game1.playSound("stoneStep");
                         return false;
@@ -1155,6 +1155,7 @@ namespace MultiRingInfiniteForging
                     // Slot is occupied: swap with the cursor.
                     __instance.leftIngredientSpot.item = carriedAny;
                     Game1.player.CursorSlotItem = leftExisting;
+                    NotifyForgeSlotsChanged(__instance);
                     ModEntry.DiagVerbose("[Test] Forge swap: " + carriedAny.Name + " ↔ " + leftExisting.Name + " in left slot");
                     if (playSound) Game1.playSound("stoneStep");
                     return false;
@@ -1211,6 +1212,7 @@ namespace MultiRingInfiniteForging
                     {
                         __instance.rightIngredientSpot.item = carriedAny;
                         Game1.player.CursorSlotItem = null;
+                        NotifyForgeSlotsChanged(__instance);
                         ModEntry.DiagVerbose("[Test] Forge drop accepted: " + carriedAny.Name + " → right slot");
                         if (playSound) Game1.playSound("stoneStep");
                         return false;
@@ -1219,6 +1221,7 @@ namespace MultiRingInfiniteForging
                     // Swap.
                     __instance.rightIngredientSpot.item = carriedAny;
                     Game1.player.CursorSlotItem = rightExisting;
+                    NotifyForgeSlotsChanged(__instance);
                     ModEntry.DiagVerbose("[Test] Forge swap: " + carriedAny.Name + " ↔ " + rightExisting.Name + " in right slot");
                     if (playSound) Game1.playSound("stoneStep");
                     return false;
@@ -1238,9 +1241,18 @@ namespace MultiRingInfiniteForging
         /// <summary>Right-click handling.  Vanilla's path (MenuWithInventory.receiveRightClick)
         /// only knows about its private _heldItem: with a ring on our CursorSlotItem carry, it
         /// would happily lift a second item onto _heldItem — the dual-carry mix-and-match state
-        /// every guard in <see cref="LeftClick_Prefix"/> exists to prevent.  Also adds panel
-        /// right-click actions for parity with the inventory page (unequip panel ring to
-        /// inventory; move equipped Ring1/Ring2 into the first empty panel slot).</summary>
+        /// every guard in <see cref="LeftClick_Prefix"/> exists to prevent.  Instead,
+        /// right-click is the forge's "smart send":
+        ///   - rings (panel slots, equipped Ring1/Ring2, or inventory) go to the first free,
+        ///     valid forge ingredient slot;
+        ///   - inventory tools/weapons go to the left slot — or the right slot for a
+        ///     same-type weapon when the left holds a matching one (appearance copy);
+        ///   - forge ingredients (gems, Diamond, Prismatic Shard, Dragon Tooth, Galaxy
+        ///     Soul) go to the right slot only;
+        ///   - a filled forge slot sends its content back: rings to the panel, then an
+        ///     empty Ring1/Ring2, then inventory; everything else to the inventory.
+        /// Works on controller via the X button (vanilla maps gamepad X to
+        /// receiveRightClick in menus, Game1.updateActiveMenu).</summary>
         public static bool RightClick_Prefix(ForgeMenu __instance, int x, int y, bool playSound)
         {
             // While our cursor carry is occupied, block vanilla's right-click path entirely.
@@ -1250,32 +1262,53 @@ namespace MultiRingInfiniteForging
                 return false;
             }
 
-            if (_panelOpen)
+            // Right-click an equipped vanilla ring (Ring1/Ring2) → send it straight into
+            // the first free, valid forge ingredient slot.  Works with the panel open or
+            // closed: one consistent rule at the forge — right-click = send to forge.
+            var leftRingIcon  = __instance.equipmentIcons.Find(c => c.name == "Ring1");
+            var rightRingIcon = __instance.equipmentIcons.Find(c => c.name == "Ring2");
+            bool clickedLeft  = leftRingIcon  != null && leftRingIcon.containsPoint(x, y);
+            bool clickedRight = rightRingIcon != null && rightRingIcon.containsPoint(x, y);
+            if (clickedLeft || clickedRight)
             {
-                // Right-click an equipped vanilla ring → move into the first empty panel slot.
-                var leftRingIcon  = __instance.equipmentIcons.Find(c => c.name == "Ring1");
-                var rightRingIcon = __instance.equipmentIcons.Find(c => c.name == "Ring2");
-                bool clickedLeft  = leftRingIcon  != null && leftRingIcon.containsPoint(x, y);
-                bool clickedRight = rightRingIcon != null && rightRingIcon.containsPoint(x, y);
-                Ring? clickedRing = clickedLeft ? Game1.player.leftRing.Value
-                    : clickedRight ? Game1.player.rightRing.Value
-                    : null;
-                if (clickedRing != null)
+                Ring? equipped = clickedLeft ? Game1.player.leftRing.Value : Game1.player.rightRing.Value;
+                if (equipped == null)
+                    return false; // empty slot: nothing to send (vanilla does nothing here either)
+
+                // Same gating as left-click pickups: dimmed rings stay put.
+                if (!IsRingAllowedInForgeContext(equipped, __instance)
+                    || IsRingBlockedByDuplicateCap(equipped, __instance))
                 {
-                    int firstEmpty = RingSlotManager.Slots.FindIndex(r => r == null);
-                    if (firstEmpty >= 0)
-                    {
-                        ModEntry.DiagVerbose("[Test] Forge right-click transfer " + clickedRing.Name + " → panel slot " + firstEmpty);
-                        clickedRing.onUnequip(Game1.player);
-                        if (clickedLeft) Game1.player.leftRing.Value  = null;
-                        else             Game1.player.rightRing.Value = null;
-                        RingSlotManager.Equip(firstEmpty, clickedRing);
-                        if (playSound) Game1.playSound("crit");
-                        return false;
-                    }
+                    ModEntry.DiagVerbose("[Test] Forge right-click send blocked: " + equipped.Name + " dimmed");
+                    return false;
                 }
 
-                // Right-click a panel slot → return its ring straight to inventory.
+                var equippedDest = GetFreeForgeSlotFor(__instance, equipped);
+                if (equippedDest == null)
+                {
+                    ModEntry.DiagVerbose("[Test] Forge right-click send: no free/valid forge slot for " + equipped.Name);
+                    return false;
+                }
+
+                ModEntry.DiagVerbose(
+                    "[Test] Forge right-click send " + equipped.Name + " from " + (clickedLeft ? "Ring1" : "Ring2")
+                    + " → forge " + (ReferenceEquals(equippedDest, __instance.leftIngredientSpot) ? "left" : "right") + " slot");
+                equipped.onUnequip(Game1.player);
+                if (clickedLeft) Game1.player.leftRing.Value  = null;
+                else             Game1.player.rightRing.Value = null;
+                Game1.player.buffs.Dirty = true;
+                equippedDest.item = equipped;
+                NotifyForgeSlotsChanged(__instance);
+                if (playSound) Game1.playSound("stoneStep");
+                return false;
+            }
+
+            if (_panelOpen)
+            {
+                // Right-click a panel slot → send the ring straight into the first free,
+                // valid forge ingredient slot (left first, then right): one-click
+                // combining, which is what the panel is for at the forge.  (Unequipping
+                // to inventory stays an inventory-page-only action.)
                 foreach (var slot in Slots)
                 {
                     if (!slot.containsPoint(x, y)) continue;
@@ -1285,25 +1318,169 @@ namespace MultiRingInfiniteForging
                     Ring? ring = RingSlotManager.Slots[idx];
                     if (ring == null) return false;
 
-                    ModEntry.DiagVerbose("[Test] Forge right-click unequip " + ring.Name + " from panel slot " + idx);
+                    // Same gating as left-click pickups: dimmed rings stay put.
+                    if (!IsRingAllowedInForgeContext(ring, __instance)
+                        || IsRingBlockedByDuplicateCap(ring, __instance))
+                    {
+                        ModEntry.DiagVerbose("[Test] Forge right-click send blocked: " + ring.Name + " dimmed");
+                        return false;
+                    }
+
+                    var dest = GetFreeForgeSlotFor(__instance, ring);
+                    if (dest == null)
+                    {
+                        // Both forge slots occupied (or the pairing would be invalid) — no-op.
+                        ModEntry.DiagVerbose("[Test] Forge right-click send: no free/valid forge slot for " + ring.Name);
+                        return false;
+                    }
+
+                    ModEntry.DiagVerbose(
+                        "[Test] Forge right-click send " + ring.Name + " from panel slot " + idx
+                        + " → forge " + (ReferenceEquals(dest, __instance.leftIngredientSpot) ? "left" : "right") + " slot");
                     RingSlotManager.Equip(idx, null);
-                    var leftover = Game1.player.addItemToInventory(ring);
-                    if (leftover != null) Game1.player.CursorSlotItem = leftover;
-                    if (playSound) Game1.playSound("coin");
+                    dest.item = ring;
+                    NotifyForgeSlotsChanged(__instance);
+                    if (playSound) Game1.playSound("stoneStep");
                     return false;
                 }
             }
 
-            // Block right-click pickups (onto vanilla's _heldItem) of inventory rings the
-            // left-click guards would refuse — dimmed by forge context or the duplicate cap.
+            // Right-click a filled forge ingredient slot → send its content back where it
+            // belongs: rings via ReturnRingFromForge (panel → Ring1/Ring2 → inventory);
+            // tools, weapons, and forge ingredients straight back to the inventory.
+            foreach (var spot in new[] { __instance.leftIngredientSpot, __instance.rightIngredientSpot })
+            {
+                if (!spot.containsPoint(x, y) || spot.item == null)
+                    continue;
+
+                if (spot.item is Ring forgeRing)
+                {
+                    if (ReturnRingFromForge(__instance, forgeRing, playSound))
+                    {
+                        spot.item = null;
+                        NotifyForgeSlotsChanged(__instance);
+                    }
+                    return false;
+                }
+
+                // addItemToInventory can place part of a stack; whatever didn't fit stays
+                // in the forge slot.
+                int stackBefore = spot.item.Stack;
+                var slotLeftover = Game1.player.addItemToInventory(spot.item);
+                if (slotLeftover == null)
+                {
+                    ModEntry.DiagVerbose("[Test] Forge right-click return " + spot.item.Name + " → inventory");
+                    spot.item = null;
+                    NotifyForgeSlotsChanged(__instance);
+                    if (playSound) Game1.playSound("coin");
+                }
+                else
+                {
+                    bool partial = slotLeftover.Stack < stackBefore;
+                    ModEntry.DiagVerbose(
+                        "[Test] Forge right-click return: inventory full"
+                        + (partial ? " (partial transfer)" : "") + ", keeping " + slotLeftover.Name + " in slot");
+                    spot.item = slotLeftover;
+                    if (playSound && partial) Game1.playSound("coin");
+                }
+                return false;
+            }
+
+            // Inventory right-click routing: forge-relevant items are sent to their slot
+            // instead of vanilla's pick-up-one-onto-_heldItem (which our carry guards
+            // would fight anyway).  Anything else falls through to vanilla.
             int invIdx = __instance.inventory.getInventoryPositionOfClick(x, y);
             if (invIdx >= 0 && invIdx < __instance.inventory.actualInventory.Count
-                && __instance.inventory.actualInventory[invIdx] is Ring invRing
-                && (!IsRingAllowedInForgeContext(invRing, __instance)
-                    || IsRingBlockedByDuplicateCap(invRing, __instance)))
+                && __instance.inventory.actualInventory[invIdx] is { } invItem)
             {
-                ModEntry.DiagVerbose("[Test] Forge right-click pickup blocked: " + invRing.Name + " dimmed");
-                return false;
+                // Rings → first free, valid forge slot (same rule as panel rings).
+                if (invItem is Ring invRing)
+                {
+                    if (!IsRingAllowedInForgeContext(invRing, __instance)
+                        || IsRingBlockedByDuplicateCap(invRing, __instance))
+                    {
+                        ModEntry.DiagVerbose("[Test] Forge right-click send blocked: " + invRing.Name + " dimmed");
+                        return false;
+                    }
+                    var invRingDest = GetFreeForgeSlotFor(__instance, invRing);
+                    if (invRingDest == null)
+                    {
+                        ModEntry.DiagVerbose("[Test] Forge right-click send: no free/valid forge slot for " + invRing.Name);
+                        return false;
+                    }
+                    ModEntry.DiagVerbose(
+                        "[Test] Forge right-click send " + invRing.Name + " from inventory → forge "
+                        + (ReferenceEquals(invRingDest, __instance.leftIngredientSpot) ? "left" : "right") + " slot");
+                    __instance.inventory.actualInventory[invIdx] = null;
+                    invRingDest.item = invRing;
+                    NotifyForgeSlotsChanged(__instance);
+                    if (playSound) Game1.playSound("stoneStep");
+                    return false;
+                }
+
+                // Weapons/tools → the left slot — except a same-type weapon, which goes to
+                // the RIGHT slot when the left already holds a matching weapon (vanilla's
+                // appearance-copy forge).
+                if (invItem is Tool invTool)
+                {
+                    if (invTool is StardewValley.Tools.MeleeWeapon invWeapon
+                        && __instance.rightIngredientSpot.item == null
+                        && __instance.leftIngredientSpot.item is StardewValley.Tools.MeleeWeapon leftWeapon
+                        && CanRightItemEnchantTool(leftWeapon, invWeapon))
+                    {
+                        ModEntry.DiagVerbose("[Test] Forge right-click send " + invWeapon.Name + " → forge right slot (appearance copy)");
+                        __instance.inventory.actualInventory[invIdx] = null;
+                        __instance.rightIngredientSpot.item = invWeapon;
+                        NotifyForgeSlotsChanged(__instance);
+                        if (playSound) Game1.playSound("stoneStep");
+                        return false;
+                    }
+                    if (__instance.leftIngredientSpot.item == null
+                        && IsAcceptedInLeftSlot(__instance, invTool))
+                    {
+                        // Honor the verdict the highlighting shows: with an ingredient in
+                        // the right slot, only send a tool that forms a valid, non-no-op
+                        // craft with it.  A weapon at its forge cap is dimmed against a
+                        // gem — right-click must refuse it too, like it does currencies.
+                        if (__instance.rightIngredientSpot.item is { } rightOccupant
+                            && !IsValidCraft(__instance, invTool, rightOccupant))
+                        {
+                            ModEntry.DiagVerbose(
+                                "[Test] Forge right-click send blocked: " + invTool.Name
+                                + " dimmed (no valid craft with " + rightOccupant.Name + ")");
+                            return false;
+                        }
+                        ModEntry.DiagVerbose("[Test] Forge right-click send " + invTool.Name + " → forge left slot");
+                        __instance.inventory.actualInventory[invIdx] = null;
+                        __instance.leftIngredientSpot.item = invTool;
+                        NotifyForgeSlotsChanged(__instance);
+                        if (playSound) Game1.playSound("stoneStep");
+                        return false;
+                    }
+                    ModEntry.DiagVerbose("[Test] Forge right-click send: no destination for " + invTool.Name);
+                    return false;
+                }
+
+                // Forge ingredients (gems, Diamond, Prismatic Shard, Dragon Tooth, Galaxy
+                // Soul) → the RIGHT slot only.  The whole stack moves; crafting consumes
+                // one per craft as usual.
+                if (IsValidForgeItem(__instance, invItem))
+                {
+                    if (__instance.rightIngredientSpot.item == null
+                        && IsAcceptedInRightSlot(__instance, invItem))
+                    {
+                        ModEntry.DiagVerbose("[Test] Forge right-click send " + invItem.Name + " → forge right slot");
+                        __instance.inventory.actualInventory[invIdx] = null;
+                        __instance.rightIngredientSpot.item = invItem;
+                        NotifyForgeSlotsChanged(__instance);
+                        if (playSound) Game1.playSound("stoneStep");
+                        return false;
+                    }
+                    ModEntry.DiagVerbose("[Test] Forge right-click send: right slot unavailable/invalid for " + invItem.Name);
+                    return false;
+                }
+
+                // Not forge-relevant: vanilla right-click (stack pickup etc.).
             }
 
             return true;
@@ -1330,6 +1507,9 @@ namespace MultiRingInfiniteForging
 
             // Dragon Tooth → re-rolls the secondary enchantment on galaxy weapons.
             if (item.QualifiedItemId == "(O)852") return true;
+
+            // Galaxy Soul → evolves fully-souled Galaxy weapons into Infinity weapons.
+            if (item.QualifiedItemId == "(O)896") return true;
 
             // (Cinder Shard "(O)848" is the forge currency, NOT a right-slot ingredient.)
 
@@ -1358,7 +1538,10 @@ namespace MultiRingInfiniteForging
                 {
                     var available = StardewValley.Enchantments.BaseEnchantment
                         .GetAvailableEnchantmentsForItem(leftTool);
-                    return available != null && available.Count > 0;
+                    bool anyAvailable = available != null && available.Count > 0;
+                    if (!anyAvailable)
+                        TestLogOnce("CanRightItemEnchantTool: Prismatic Shard refused on " + leftTool.Name + " (no unapplied enchantments left)");
+                    return anyAvailable;
                 }
 
                 var allEnch = StardewValley.Enchantments.BaseEnchantment.GetAvailableEnchantments();
@@ -1370,14 +1553,23 @@ namespace MultiRingInfiniteForging
                 return false;
             }
 
-            // Dragon Tooth: re-rolls the innate stat enchantment on a MeleeWeapon.
-            // For non-Galaxy weapons below level 15, vanilla handles this.  For
-            // Galaxy/Infinity weapons the Harmony prefix (Tool_Forge_DragonToothReroll_Prefix)
-            // takes over.  We just check the weapon is valid and let the forge decide.
+            // Dragon Tooth: re-rolls (or, with DragonToothStacking, adds to) the innate
+            // stat enchantments on a MeleeWeapon.  For non-Galaxy weapons below level 15,
+            // vanilla handles this.  For Galaxy/Infinity weapons (and all weapons when
+            // stacking/always-max are on) the Harmony prefix
+            // (Tool_Forge_DragonToothReroll_Prefix) takes over.
             if (rightItem.QualifiedItemId == "(O)852")
             {
                 if (leftTool is not StardewValley.Tools.MeleeWeapon weapon) return false;
                 if (!Patches.IsScytheForgingAllowed(weapon)) return false;
+                // Stacking mode: once every innate type is at its per-type cap the craft
+                // is a no-op — dim/refuse it.  Re-roll mode is always meaningful.
+                if (ModEntry.Instance.Config.DragonToothStacking
+                    && !Patches.HasInnateBelowMax(weapon))
+                {
+                    TestLogOnce("CanRightItemEnchantTool: Dragon Tooth refused on " + weapon.Name + " (every innate type at cap, stacking mode)");
+                    return false;
+                }
                 return true;
             }
 
@@ -1395,7 +1587,11 @@ namespace MultiRingInfiniteForging
                 // craft at the cap is a no-op (consumes the diamond + shards, adds
                 // nothing).  Refuse regardless of RemoveDiamondForgesCap.
                 if (leftTool.GetTotalForgeLevels() >= leftTool.GetMaxForges())
+                {
+                    TestLogOnce("CanRightItemEnchantTool: Diamond refused on " + leftTool.Name + " (at forge cap "
+                        + leftTool.GetTotalForgeLevels() + "/" + leftTool.GetMaxForges() + ")");
                     return false;
+                }
 
                 bool anyMissing =
                     !leftTool.hasEnchantmentOfType<StardewValley.Enchantments.EmeraldEnchantment>()
@@ -1418,7 +1614,11 @@ namespace MultiRingInfiniteForging
             var enchantment = StardewValley.Enchantments.BaseEnchantment
                 .GetEnchantmentFromItem(leftTool, rightItem);
             if (enchantment == null) return false;
-            return leftTool.CanAddEnchantment(enchantment);
+            bool canAdd = leftTool.CanAddEnchantment(enchantment);
+            if (!canAdd)
+                TestLogOnce("CanRightItemEnchantTool: " + rightItem.Name + " refused on " + leftTool.Name
+                    + " (CanAddEnchantment false — forge cap " + leftTool.GetTotalForgeLevels() + "/" + leftTool.GetMaxForges() + ")");
+            return canAdd;
         }
 
         // ============================================================
@@ -1631,6 +1831,92 @@ namespace MultiRingInfiniteForging
             return true;
         }
 
+        /// <summary>Vanilla's left-slot rule (ForgeMenu._leftIngredientSpotClicked): any
+        /// Tool or Ring, gated by IsValidCraftIngredient (only restrictive for untrashable
+        /// items without available enchantments).  There is NO upgrade-level requirement —
+        /// base tools are enchantable.  Scythes additionally need a scythe-forging mod.</summary>
+        private static bool IsAcceptedInLeftSlot(ForgeMenu menu, Item item) =>
+            menu.IsValidCraftIngredient(item)
+            && (item is Ring
+                || (item is StardewValley.Tools.MeleeWeapon mw
+                    ? Patches.IsScytheForgingAllowed(mw)
+                    : item is Tool));
+
+        /// <summary>Whether the item would be accepted in the right ingredient slot given
+        /// the current left item: any forge ingredient when the left is empty, otherwise a
+        /// valid (and non-no-op) pairing with the left item.</summary>
+        private static bool IsAcceptedInRightSlot(ForgeMenu menu, Item item)
+        {
+            Item? left = menu.leftIngredientSpot.item;
+            if (left == null)
+                return IsValidForgeItem(menu, item);
+            if (!IsValidCraft(menu, left, item))
+                return false;
+            if (left is Tool leftTool && !CanRightItemEnchantTool(leftTool, item))
+                return false;
+            return true;
+        }
+
+        /// <summary>Route a ring taken out of a forge slot back where it belongs: the
+        /// first empty panel slot (when the panel is open), else an empty vanilla ring
+        /// slot (Ring1 then Ring2), else the inventory.  Returns false only when
+        /// everything is full — the ring should then stay in the forge slot.</summary>
+        private static bool ReturnRingFromForge(ForgeMenu menu, Ring ring, bool playSound)
+        {
+            if (_panelOpen)
+            {
+                int firstEmpty = RingSlotManager.Slots.FindIndex(r => r == null);
+                if (firstEmpty >= 0)
+                {
+                    ModEntry.DiagVerbose("[Test] Forge right-click return " + ring.Name + " → panel slot " + firstEmpty);
+                    RingSlotManager.Equip(firstEmpty, ring);
+                    if (playSound) Game1.playSound("crit");
+                    return true;
+                }
+            }
+            if (Game1.player.leftRing.Value == null)
+            {
+                ModEntry.DiagVerbose("[Test] Forge right-click return " + ring.Name + " → Ring1");
+                Game1.player.leftRing.Value = ring;
+                ring.onEquip(Game1.player);
+                Game1.player.buffs.Dirty = true;
+                if (playSound) Game1.playSound("crit");
+                return true;
+            }
+            if (Game1.player.rightRing.Value == null)
+            {
+                ModEntry.DiagVerbose("[Test] Forge right-click return " + ring.Name + " → Ring2");
+                Game1.player.rightRing.Value = ring;
+                ring.onEquip(Game1.player);
+                Game1.player.buffs.Dirty = true;
+                if (playSound) Game1.playSound("crit");
+                return true;
+            }
+            if (Game1.player.addItemToInventory(ring) == null)
+            {
+                ModEntry.DiagVerbose("[Test] Forge right-click return " + ring.Name + " → inventory");
+                if (playSound) Game1.playSound("coin");
+                return true;
+            }
+            ModEntry.DiagVerbose("[Test] Forge right-click return: everywhere full, keeping " + ring.Name + " in forge slot");
+            return false;
+        }
+
+        /// <summary>The first free forge ingredient slot that would form a valid pairing
+        /// with <paramref name="ring"/> — left slot first, then right — or null when both
+        /// are occupied or no valid placement exists.  Used by the right-click
+        /// "send to forge" actions for panel, equipped, and inventory rings.</summary>
+        private static ClickableTextureComponent? GetFreeForgeSlotFor(ForgeMenu menu, Ring ring)
+        {
+            Item? left = menu.leftIngredientSpot.item;
+            Item? right = menu.rightIngredientSpot.item;
+            if (left == null && (right == null || IsValidCraft(menu, ring, right)))
+                return menu.leftIngredientSpot;
+            if (right == null && (left == null || IsValidCraft(menu, left, ring)))
+                return menu.rightIngredientSpot;
+            return null;
+        }
+
         private static bool IsRingBlockedByDuplicateCap(Ring ring, ForgeMenu menu)
         {
             if (!ModEntry.Instance.Config.AddCombinedDuplicateRingCap
@@ -1712,6 +1998,7 @@ namespace MultiRingInfiniteForging
                         ModEntry.DiagVerbose($"[Forge]   -> drop onto forge.left");
                         menu.leftIngredientSpot.item = carriedRing;
                         Game1.player.CursorSlotItem = null;
+                        NotifyForgeSlotsChanged(menu);
                         if (playSound) Game1.playSound("stoneStep");
                         return false;
                     }
@@ -1726,6 +2013,7 @@ namespace MultiRingInfiniteForging
                         ModEntry.DiagVerbose($"[Forge]   -> swap with forge.left (existing ring)");
                         menu.leftIngredientSpot.item = carriedRing;
                         Game1.player.CursorSlotItem = leftItem;
+                        NotifyForgeSlotsChanged(menu);
                         if (playSound) Game1.playSound("crit");
                         return false;
                     }
@@ -1746,6 +2034,7 @@ namespace MultiRingInfiniteForging
                         ModEntry.DiagVerbose($"[Forge]   -> drop onto forge.right");
                         menu.rightIngredientSpot.item = carriedRing;
                         Game1.player.CursorSlotItem = null;
+                        NotifyForgeSlotsChanged(menu);
                         if (playSound) Game1.playSound("stoneStep");
                         return false;
                     }
@@ -1760,6 +2049,7 @@ namespace MultiRingInfiniteForging
                         ModEntry.DiagVerbose($"[Forge]   -> swap with forge.right (existing ring)");
                         menu.rightIngredientSpot.item = carriedRing;
                         Game1.player.CursorSlotItem = rightItem;
+                        NotifyForgeSlotsChanged(menu);
                         if (playSound) Game1.playSound("crit");
                         return false;
                     }
@@ -1912,6 +2202,7 @@ namespace MultiRingInfiniteForging
                 ModEntry.DiagVerbose("[Test] Forge pickup: " + leftSlotRing.Name + " from forge left slot");
                 menu.leftIngredientSpot.item = null;
                 Game1.player.CursorSlotItem = leftSlotRing;
+                NotifyForgeSlotsChanged(menu);
                 if (playSound) Game1.playSound("crit");
                 return false;
             }
@@ -1923,6 +2214,7 @@ namespace MultiRingInfiniteForging
                 ModEntry.DiagVerbose("[Test] Forge pickup: " + rightSlotRing.Name + " from forge right slot");
                 menu.rightIngredientSpot.item = null;
                 Game1.player.CursorSlotItem = rightSlotRing;
+                NotifyForgeSlotsChanged(menu);
                 if (playSound) Game1.playSound("crit");
                 return false;
             }
@@ -2002,25 +2294,58 @@ namespace MultiRingInfiniteForging
         private static void SetHeldItem(ForgeMenu menu, Item? item) =>
             HeldItemField?.SetValue(menu, item);
 
-        /// <summary>
-        /// Invokes the private ForgeMenu.IsValidCraft method via reflection to determine if two items can be combined in the forge.
-        /// </summary>
-        /// <param name="menu">The ForgeMenu instance to invoke the method on.</param>
-        /// <param name="left">The item in the left slot of the forge.</param>
-        /// <param name="right">The item in the right slot of the forge.</param>
-        /// <return>True if the two items form a valid forge combination, false otherwise or if the reflection call fails.</return>
-        internal static bool IsValidCraft(ForgeMenu menu, Item? left, Item? right)
+        /// <summary>Run vanilla's post-slot-change bookkeeping after we mutate the forge
+        /// ingredient slots directly.  Vanilla's own _left/_rightIngredientSpotClicked do
+        /// this for their changes: drop the cached highlight dictionary (its regeneration
+        /// probes IsValidCraft, which is what lets Forge Menu Choice notice a broken pair
+        /// and close its carousel) and re-validate the craft state.  With BOTH slots empty
+        /// no probes fire at all, so any stale carousel is closed explicitly.</summary>
+        private static void NotifyForgeSlotsChanged(ForgeMenu menu)
         {
-            if (IsValidCraftMethod == null) return false;
             try
             {
-                var result = IsValidCraftMethod.Invoke(menu, new object?[] { left, right });
-                return result is bool b && b;
+                HighlightDictionaryField?.SetValue(menu, null);
+                ValidateCraftMethod?.Invoke(menu, null);
+                if (menu.leftIngredientSpot.item == null && menu.rightIngredientSpot.item == null)
+                    ForgeMenuChoiceCompat.CloseCarousel();
             }
             catch
             {
-                return false;
+                // Bookkeeping only — never break the click that triggered it.
             }
+        }
+
+        /// <summary>
+        /// Side-effect-free craft validity: vanilla ForgeMenu.IsValidCraft's logic (mirrored
+        /// below) plus this mod's overrides — WITHOUT calling the patched method.  Our panel
+        /// re-evaluates highlighting for every inventory item every frame; routing those
+        /// probes through the real IsValidCraft would fire other mods' stateful patches on it.
+        /// Forge Menu Choice in particular opens/closes its enchantment-selection carousel in
+        /// an IsValidCraft prefix and trashes it on any call that isn't tool+prismatic, so our
+        /// per-frame probing destroyed the player's selection continuously.  CanForge and
+        /// CanCombine are still invoked virtually, so mods patching those deeper hooks keep
+        /// working.  The real craft path (the game's own IsValidCraft calls) is unaffected and
+        /// still runs every mod's patches, including our postfix.
+        /// </summary>
+        /// <param name="menu">The forge menu (kept for call-site compatibility; the
+        /// evaluation itself only depends on the two items).</param>
+        /// <param name="left">The prospective left (tool/ring) item.</param>
+        /// <param name="right">The prospective right (ingredient) item.</param>
+        /// <return>True if the two items would form a valid forge combination.</return>
+        internal static bool IsValidCraft(ForgeMenu menu, Item? left, Item? right)
+        {
+            // Mirror of vanilla ForgeMenu.IsValidCraft (null check, Tool.CanForge,
+            // Ring.CanCombine) — small and stable, and the heavy lifting lives in the
+            // virtual CanForge/CanCombine calls.
+            bool vanilla = false;
+            if (left != null && right != null)
+            {
+                if (left is Tool tool && tool.CanForge(right))
+                    vanilla = true;
+                else if (left is Ring leftRing && right is Ring rightRing && leftRing.CanCombine(rightRing))
+                    vanilla = true;
+            }
+            return Patches.ApplyCraftOverrides(left, right, vanilla);
         }
     }
 }

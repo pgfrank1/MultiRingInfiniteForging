@@ -208,6 +208,7 @@ namespace MultiRingInfiniteForging
             // loaded (so their assemblies are available). No-op if the target mod is absent.
             var harmony = new Harmony(ModManifest.UniqueID);
             MoreRingsCompat.TryApply(harmony, Helper, Monitor);
+            ForgeMenuChoiceCompat.Init(harmony, Helper, Monitor);
         }
 
         /// <summary>Per-tick forwarder so light-source rings (Glow, Iridium Band,
@@ -227,13 +228,14 @@ namespace MultiRingInfiniteForging
         }
         
         /// <summary>Periodic diagnostic snapshot of the player's combined buff state.
-        /// Mirrors the mrif_stats console command but at a per-second cadence.  Only
-        /// emitted when VerboseLogging is enabled in the config — so by default this
-        /// adds zero noise to the log file.  Designed so a verbose-mode log captures
-        /// every value a user would want to verify when reporting a ring-effect bug.</summary>
+        /// Mirrors the mrif_stats console command but at a per-second cadence.  Gated by
+        /// its own VerboseTickSnapshot option, independent of VerboseLogging — it's the
+        /// noisiest diagnostic by far, so it can be silenced while testing other things
+        /// (or captured alone).  Designed so a snapshot log captures every value a user
+        /// would want to verify when reporting a ring-effect bug.</summary>
         private void OnOneSecondTick(object? sender, OneSecondUpdateTickedEventArgs e)
         {
-            if (!Config.VerboseLogging) return;
+            if (!Config.VerboseTickSnapshot) return;
             if (!Context.IsWorldReady || Game1.player == null) return;
 
             int extra = 0;
@@ -270,7 +272,9 @@ namespace MultiRingInfiniteForging
             }
             catch { /* ignore — diagnostics must never throw */ }
 
-            DiagVerbose(
+            // Direct Trace log (not DiagVerbose): this snapshot is gated solely by
+            // VerboseTickSnapshot, independent of the VerboseLogging master switch.
+            Monitor.Log(
                 "[Tick] === snapshot ===" +
                 $"\n  location              = {loc?.Name ?? "null"}" +
                 $"\n  position              = {p.Position}" +
@@ -298,7 +302,8 @@ namespace MultiRingInfiniteForging
                 "\n  -- Mechanics --" +
                 $"\n  buffs.Dirty           = {b.Dirty}" +
                 $"\n  sharedLights in loc   = {sharedLights}" +
-                $"\n  in combat?            = {Game1.fadeToBlack || Game1.currentMinigame != null || p.UsingTool}");
+                $"\n  in combat?            = {Game1.fadeToBlack || Game1.currentMinigame != null || p.UsingTool}",
+                LogLevel.Trace);
         }
 
         /// <summary>If an extra-ring panel is open and the player presses B (cancel) on the

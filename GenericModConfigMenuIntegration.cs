@@ -24,7 +24,11 @@ namespace MultiRingInfiniteForging
                     config.WeaponForgingCap = -1;
                     config.RemoveDiamondForgesCap = false;
                     config.MultipleEnchantments = true;
+                    config.DragonToothStacking = false;
+                    config.AlwaysMaxDragonToothStat = true;
+                    config.ForgeMenuChoiceIntegration = true;
                     config.VerboseLogging = false;
+                    config.VerboseTickSnapshot = false;
                 },
                 save: save
             );
@@ -108,6 +112,30 @@ namespace MultiRingInfiniteForging
                 name: () => ModEntry.T("config.multipleEnchantments.name"),
                 tooltip: () => ModEntry.T("config.multipleEnchantments.description")
             );
+
+            api.AddBoolOption(
+                mod: mod.ModManifest,
+                getValue: () => config.DragonToothStacking,
+                setValue: v => config.DragonToothStacking = v,
+                name: () => ModEntry.T("config.DragonToothStacking.name"),
+                tooltip: () => ModEntry.T("config.DragonToothStacking.description")
+            );
+
+            api.AddBoolOption(
+                mod: mod.ModManifest,
+                getValue: () => config.AlwaysMaxDragonToothStat,
+                setValue: v => config.AlwaysMaxDragonToothStat = v,
+                name: () => ModEntry.T("config.AlwaysMaxDragonToothStat.name"),
+                tooltip: () => ModEntry.T("config.AlwaysMaxDragonToothStat.description")
+            );
+
+            api.AddBoolOption(
+                mod: mod.ModManifest,
+                getValue: () => config.ForgeMenuChoiceIntegration,
+                setValue: v => config.ForgeMenuChoiceIntegration = v,
+                name: () => ModEntry.T("config.ForgeMenuChoiceIntegration.name"),
+                tooltip: () => ModEntry.T("config.ForgeMenuChoiceIntegration.description")
+            );
             api.AddSectionTitle(mod.ModManifest, () => ModEntry.T("config.section.title.verbose.logging"));
             
             api.AddBoolOption(
@@ -116,6 +144,14 @@ namespace MultiRingInfiniteForging
                 setValue: v => config.VerboseLogging = v,
                 name: () => ModEntry.T("config.verbose.logging.name"),
                 tooltip: () => ModEntry.T("config.verbose.logging.description")
+            );
+
+            api.AddBoolOption(
+                mod: mod.ModManifest,
+                getValue: () => config.VerboseTickSnapshot,
+                setValue: v => config.VerboseTickSnapshot = v,
+                name: () => ModEntry.T("config.VerboseTickSnapshot.name"),
+                tooltip: () => ModEntry.T("config.VerboseTickSnapshot.description")
             );
             // After your existing AddNumberOption / AddBoolOption calls:
             api.AddSectionTitle(mod.ModManifest, () => ModEntry.T("config.section.title.uninstall"));
