@@ -1,7 +1,7 @@
 ﻿{
   "Name": "Multi Ring Infinite Forging",
   "Author": "ringlord174",
-  "Version": "1.1.0",
+  "Version": "1.1.1",
   "Description": "Adds extra ring slots and removes the limits on ring forging/combining.",
   "UniqueID": "ringlord174.MultiRingInfiniteForging",
   "EntryDll": "MultiRingInfiniteForging.dll",
