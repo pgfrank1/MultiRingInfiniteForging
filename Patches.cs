@@ -784,7 +784,10 @@ namespace MultiRingInfiniteForging
             // changes the semantics) stay with vanilla's path — including Forge Menu
             // Choice's own selection transpiler inside it.
             bool vanillaEligible = !weapon.Name.Contains("Galaxy") && weapon.getItemLevel() < 15;
-            if (vanillaEligible && !stacking && !alwaysMax)
+            // Don't hand a fully-stacked weapon (all five core innates) to vanilla's own forge
+            // path either: its reroll would hang on the same exclude-list problem.  We take
+            // those over and roll them safely below.
+            if (vanillaEligible && !stacking && !alwaysMax && !ContainsAllCoreInnates(weapon.enchantments))
             {
                 ModEntry.DiagVerbose("[Test] Dragon Tooth: non-Galaxy below level 15, passing to vanilla");
                 return true;
@@ -831,9 +834,16 @@ namespace MultiRingInfiniteForging
             else if (!stacking)
             {
                 // Random re-roll via vanilla's roller (it re-rolls away from the
-                // just-stripped types).
-                MeleeWeapon.attemptAddRandomInnateEnchantment(
-                    weapon, Game1.random, force: true, oldInnate);
+                // just-stripped types).  But vanilla's loop only terminates when it rolls a
+                // core type (Attack/Crit/WeaponSpeed/SlimeSlayer/CritPower) not in the exclude
+                // list, and its switch always picks one of those five.  A fully-stacked weapon
+                // we just stripped puts all five in oldInnate, so the loop could never satisfy
+                // that and would spin forever (the freeze that wrote a multi-GB log).  Drop the
+                // exclude list in that case so vanilla does a single unconstrained roll.
+                if (ContainsAllCoreInnates(oldInnate))
+                    MeleeWeapon.attemptAddRandomInnateEnchantment(weapon, Game1.random, force: true);
+                else
+                    MeleeWeapon.attemptAddRandomInnateEnchantment(weapon, Game1.random, force: true, oldInnate);
                 if (isRealCraft)
                     ModEntry.DiagVerbose("[Test] Dragon Tooth: random re-roll applied" + (alwaysMax ? " (maxing levels)" : ""));
             }
@@ -903,6 +913,36 @@ namespace MultiRingInfiniteForging
             yield return typeof(WeaponSpeedEnchantment);
             yield return typeof(SlimeSlayerEnchantment);
             yield return typeof(CritPowerEnchantment);
+        }
+
+        /// <summary>The five innate types vanilla's reroll switch always picks exactly one of
+        /// (<see cref="MeleeWeapon.attemptAddRandomInnateEnchantment"/>).  If a reroll's exclude
+        /// list covers all five, that loop can never roll an unexcluded type and spins forever,
+        /// so callers must not hand it such a list.</summary>
+        private static readonly Type[] CoreInnateTypes =
+        {
+            typeof(AttackEnchantment),
+            typeof(CritEnchantment),
+            typeof(WeaponSpeedEnchantment),
+            typeof(SlimeSlayerEnchantment),
+            typeof(CritPowerEnchantment),
+        };
+
+        /// <summary>True if <paramref name="enchantments"/> includes every one of the five core
+        /// innate types, the set that makes vanilla's reroll loop hang.  See
+        /// <see cref="CoreInnateTypes"/>.</summary>
+        private static bool ContainsAllCoreInnates(IEnumerable<BaseEnchantment> enchantments)
+        {
+            foreach (var core in CoreInnateTypes)
+            {
+                bool present = false;
+                foreach (var e in enchantments)
+                {
+                    if (e.GetType() == core) { present = true; break; }
+                }
+                if (!present) return false;
+            }
+            return true;
         }
 
         /// <summary>True if the weapon already carries this innate type at its per-type cap
