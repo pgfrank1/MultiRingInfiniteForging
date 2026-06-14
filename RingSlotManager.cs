@@ -28,6 +28,15 @@ namespace MultiRingInfiniteForging
         /// than discarding them.  Persisted alongside Slots.</summary>
         private static List<Ring?> Overflow => OverflowByScreen.Value;
 
+        /// <summary>The rings whose onEquip effects are currently applied to the local
+        /// player.  <see cref="Reconcile"/> diffs <see cref="Slots"/> against this list so
+        /// every slotted ring is equipped exactly once no matter how many lifecycle events
+        /// fire, which is what makes the old EnsureSize "applyEffects" double-apply guard
+        /// unnecessary.  Membership is by reference (the exact Ring instance), and it is not
+        /// persisted: it is rebuilt from Slots on load.</summary>
+        private static readonly PerScreen<List<Ring>> AppliedByScreen = new(() => new List<Ring>());
+        private static List<Ring> Applied => AppliedByScreen.Value;
+
         /// <summary>Rings reconstructed from modData for farmers other than the local
         /// player, keyed by UniqueMultiplayerID.  Invalidated by comparing the raw
         /// modData string, which only changes when that player re-persists.</summary>
@@ -45,11 +54,21 @@ namespace MultiRingInfiniteForging
 
         public static int SlotCount => ModEntry.Instance.Config.ExtraRingSlots;
 
-        /// <param name="applyEffects">Whether rings moved in/out of slots have their
-        /// onEquip/onUnequip side effects applied.  Pass false during Load, where the
-        /// freshly loaded rings haven't been equipped yet and ApplyAllEffects runs right
-        /// after — otherwise overflow-restored rings would be onEquip'd twice.</param>
-        public static void EnsureSize(bool applyEffects = true)
+        /// <summary>Bring the slot list to the configured size and sync ring effects.
+        /// Structural changes move rings between Slots and Overflow; <see cref="Reconcile"/>
+        /// then applies/removes onEquip effects to match.  Safe to call at any time,
+        /// including the title screen (Reconcile no-ops without a player).</summary>
+        public static void EnsureSize()
+        {
+            EnsureSizeStructural();
+            Reconcile();
+        }
+
+        /// <summary>Resize Slots to SlotCount by moving rings to/from Overflow, padding with
+        /// nulls when Overflow is empty.  Pure list bookkeeping with no onEquip/onUnequip
+        /// side effects (those are <see cref="Reconcile"/>'s job).  Persists if anything
+        /// moved.</summary>
+        private static void EnsureSizeStructural()
         {
             bool changed = false;
 
@@ -63,9 +82,6 @@ namespace MultiRingInfiniteForging
                     Overflow.RemoveAt(0);
                     Slots.Add(ring);
                     ModEntry.DiagVerbose("[Test] SlotManager: restored " + (ring?.DisplayName ?? "null") + " from overflow");
-                    // Re-apply effects since this ring is once again "equipped".
-                    if (applyEffects)
-                        ring?.onEquip(Game1.player);
                 }
                 else
                 {
@@ -73,9 +89,8 @@ namespace MultiRingInfiniteForging
                 }
             }
 
-            // SHRINK: move trailing slots into overflow instead of discarding.
-            //   - Their effects are removed (they're no longer equipped).
-            //   - They stay in saved data so we can restore them on grow / drain.
+            // SHRINK: move trailing slots into overflow instead of discarding, so the rings
+            // survive a shrink-then-grow.  Their effects come off in Reconcile.
             while (Slots.Count > SlotCount)
             {
                 changed = true;
@@ -83,8 +98,6 @@ namespace MultiRingInfiniteForging
                 Slots.RemoveAt(Slots.Count - 1);
                 if (ring != null)
                 {
-                    if (applyEffects)
-                        ring.onUnequip(Game1.player);
                     Overflow.Add(ring);
                     ModEntry.DiagVerbose("[Test] SlotManager: moved " + ring.DisplayName + " to overflow (slot count shrank)");
                 }
@@ -92,9 +105,80 @@ namespace MultiRingInfiniteForging
 
             if (changed)
                 Persist();
+        }
 
-            if (Game1.player != null)
-                Game1.player.buffs.Dirty = true;
+        /// <summary>The single source of truth for ring effects: onEquip any slotted ring
+        /// not yet applied, onUnequip any applied ring no longer slotted, then mark buffs
+        /// dirty if anything changed.  Idempotent (calling it repeatedly is a no-op), so no
+        /// lifecycle path can double-apply a ring.  No-ops without a player, e.g. a
+        /// title-screen EnsureSize, since there are no buffs to manage then.</summary>
+        private static void Reconcile()
+        {
+            var player = Game1.player;
+            if (player == null) return;
+
+            var applied = Applied;
+            bool changed = false;
+
+            // onUnequip rings that have left the slots (walk backwards: we mutate applied).
+            for (int i = applied.Count - 1; i >= 0; i--)
+            {
+                var ring = applied[i];
+                if (!ContainsByReference(Slots, ring))
+                {
+                    ring.onUnequip(player);
+                    applied.RemoveAt(i);
+                    changed = true;
+                }
+            }
+
+            // onEquip slotted rings whose effects aren't applied yet.
+            foreach (var ring in Slots)
+            {
+                if (ring != null && !ContainsByReference(applied, ring))
+                {
+                    ring.onEquip(player);
+                    applied.Add(ring);
+                    changed = true;
+                }
+            }
+
+            if (changed)
+            {
+                player.buffs.Dirty = true;
+                ModEntry.Diag(
+                    $"RingSlotManager.Reconcile: {applied.Count} ring(s) applied. " +
+                    $"MagneticRadius={player.MagneticRadius}");
+            }
+        }
+
+        /// <summary>Remove effects from every currently-applied ring without changing the
+        /// Slots, and forget they were applied.  Paired with a later <see cref="Reconcile"/>
+        /// to restore them: used around the overnight save so onEquip side effects (light
+        /// sources) aren't live while the Farmer is serialized.</summary>
+        private static void UnapplyAll()
+        {
+            var player = Game1.player;
+            var applied = Applied;
+            if (applied.Count == 0) return;
+            int removed = applied.Count;
+            foreach (var ring in applied)
+                ring.onUnequip(player);
+            applied.Clear();
+            if (player != null)
+                player.buffs.Dirty = true;
+            ModEntry.Diag($"RingSlotManager.UnapplyAll: removed {removed} ring(s).");
+        }
+
+        /// <summary>True if <paramref name="ring"/> is held (by reference, the exact
+        /// instance) anywhere in <paramref name="rings"/>.  Used instead of List.Contains so
+        /// the diff never relies on Ring value-equality, which a custom ring could override.</summary>
+        private static bool ContainsByReference(IEnumerable<Ring?> rings, Ring ring)
+        {
+            foreach (var r in rings)
+                if (ReferenceEquals(r, ring))
+                    return true;
+            return false;
         }
 
         /// <summary>Reset all in-memory slot state.  Called on return to title so a stale
@@ -105,6 +189,7 @@ namespace MultiRingInfiniteForging
             Slots.Clear();
             Overflow.Clear();
             RemoteRingsCache.Clear();
+            Applied.Clear();
         }
 
         /// <summary>The extra rings "worn" by any farmer.  For the local player this is the
@@ -153,31 +238,38 @@ namespace MultiRingInfiniteForging
         public static int DrainAllToPlayer()
         {
             int drained = 0;
+            var toReturn = new List<Ring>();
 
+            // Clear the slots first, then a single Reconcile removes their effects.
             for (int i = 0; i < Slots.Count; i++)
             {
-                var ring = Slots[i];
-                if (ring == null) continue;
-                ring.onUnequip(Game1.player);
-                Slots[i] = null;
-                ReturnRingToPlayer(ring);
-                drained++;
+                if (Slots[i] is Ring ring)
+                {
+                    toReturn.Add(ring);
+                    Slots[i] = null;
+                    drained++;
+                }
             }
+            Reconcile();
 
-            // Drain the overflow bucket too — these are rings the user can't
-            // currently see in the UI but are still preserved in save data.
+            // Drain the overflow bucket too: rings the user can't currently see in the UI
+            // but that are still preserved in save data.  Overflow rings were never
+            // equipped, so they need no effect removal.
             foreach (var ring in Overflow)
             {
-                if (ring == null) continue;
-                ReturnRingToPlayer(ring);
-                drained++;
+                if (ring != null)
+                {
+                    toReturn.Add(ring);
+                    drained++;
+                }
             }
             Overflow.Clear();
+
+            foreach (var ring in toReturn)
+                ReturnRingToPlayer(ring);
+
             if (drained > 0)
                 Persist();
-
-            if (drained > 0 && Game1.player != null)
-                Game1.player.buffs.Dirty = true;
 
             ModEntry.DiagVerbose("[Test] SlotManager: drained " + drained + " rings to player");
             return drained;
@@ -236,66 +328,40 @@ namespace MultiRingInfiniteForging
 
         // ---------- effects ----------
 
+        /// <summary>Ensure the slot list is sized correctly and apply effects for every
+        /// slotted ring.  Called on save load and after the overnight save.  Delegates to
+        /// the idempotent <see cref="Reconcile"/> (via EnsureSize), so calling it when
+        /// effects are already applied is a no-op.</summary>
         public static void ApplyAllEffects()
         {
             EnsureSize();
-            int applied = 0;
-            foreach (var ring in Slots)
-            {
-                if (ring != null)
-                {
-                    ring.onEquip(Game1.player);
-                    applied++;
-                }
-            }
-            if (Game1.player != null)
-                Game1.player.buffs.Dirty = true;
-            ModEntry.Diag(
-                $"RingSlotManager.ApplyAllEffects: applied {applied} ring(s). " +
-                $"MagneticRadius={Game1.player?.MagneticRadius}");
         }
 
+        /// <summary>Remove effects from every slotted ring while leaving the slots
+        /// populated.  Called before the overnight save; <see cref="ApplyAllEffects"/>
+        /// restores them afterward.</summary>
         public static void RemoveAllEffects()
         {
-            int removed = 0;
-            foreach (var ring in Slots)
-            {
-                if (ring != null)
-                {
-                    ring.onUnequip(Game1.player);
-                    removed++;
-                }
-            }
-            if (Game1.player != null)
-                Game1.player.buffs.Dirty = true;
-            ModEntry.Diag($"RingSlotManager.RemoveAllEffects: removed {removed} ring(s).");
+            UnapplyAll();
         }
 
         public static void Equip(int slot, Ring? ring)
         {
-            EnsureSize();
+            EnsureSizeStructural();
             var previous = Slots[slot];
             ModEntry.Diag(
                 $"RingSlotManager.Equip slot={slot} " +
                 $"previous={previous?.DisplayName ?? "null"} " +
                 $"new={ring?.DisplayName ?? "null"}");
 
-            // Unequip current
-            previous?.onUnequip(Game1.player);
             Slots[slot] = ring;
-            ring?.onEquip(Game1.player);
             Persist();
 
-            // Force BuffManager to recompute on the next access so AddEquipmentEffects
-            // sees the new/removed ring.  Without this, magnetic radius, defense,
-            // crit chance, etc. wouldn't update until something else dirties the cache.
-            if (Game1.player != null)
-            {
-                Game1.player.buffs.Dirty = true;
-                ModEntry.Diag(
-                    $"RingSlotManager.Equip set buffs.Dirty=true. " +
-                    $"MagneticRadius now={Game1.player.MagneticRadius}");
-            }
+            // Reconcile swaps the effects (onUnequip previous, onEquip new) and marks buffs
+            // dirty so BuffManager recomputes magnetic radius, defense, crit, etc. on next
+            // access.  Without that dirty flag those stats wouldn't update until something
+            // else invalidated the cache.
+            Reconcile();
         }
 
         // ---------- per-frame / world-event forwarders ----------
@@ -345,6 +411,7 @@ namespace MultiRingInfiniteForging
             Slots.Clear();
             Overflow.Clear();
             RemoteRingsCache.Clear();
+            Applied.Clear();
 
             MigrateLegacySaveData(helper);
 
@@ -374,9 +441,10 @@ namespace MultiRingInfiniteForging
                 if (ring != null) Overflow.Add(ring);
             }
 
-            // Don't apply equip effects here: ApplyAllEffects (called right after Load)
-            // equips every slotted ring exactly once.
-            EnsureSize(applyEffects: false);
+            // Structure only: effects are applied by the Reconcile inside ApplyAllEffects,
+            // which OnSaveLoaded calls right after Load.  (Reconcile is idempotent, so the
+            // ordering is safe regardless.)
+            EnsureSizeStructural();
             ModEntry.DiagVerbose("[Test] SlotManager: loaded " + Slots.Count + " slots, " + Overflow.Count + " overflow");
         }
 
