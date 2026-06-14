@@ -1,0 +1,171 @@
+[size=5][b]Multi Ring Infinite Forging[/b][/size]
+
+Ever felt like the forge was holding you back?  Limited to two ring slots, three gem forges per weapon, one enchantment at a time, and a hard cap on how many rings you can combine?  This mod removes those limits cleanly, configurably, and without breaking the vanilla feel.
+
+[b]Multi Ring Infinite Forging[/b] adds up to [b]36 extra ring slots[/b] behind a collapsible panel in your inventory and forge menus, lifts every artificial cap the forge imposes, and puts Dragon Tooth innate enchantments fully under your control.  Pick the options you want, leave the rest at defaults.
+
+[size=4][b]✦ New in 1.1.0[/b][/size]
+[list]
+[*][b]Multiplayer and split-screen support[/b] - each player gets their own extra ring slots and panel.[/*]
+[*][b]Dragon Tooth, your way[/b] - stack innate enchantments instead of replacing them, and/or always get max-level stats.[/*]
+[*][b][url=https://www.nexusmods.com/stardewvalley/mods/26803]Pick Your Enchantment[/url] integration[/b] - choose your Dragon Tooth innate enchantment from a carousel instead of gambling.[/*]
+[*][b]Forge right-click quality-of-life[/b] - right-click anything to send it to the correct forge slot (and back out again).[/*]
+[/list]
+
+[line]
+
+[size=4][b]✦ Features[/b][/size]
+
+[b]Extra ring slots[/b] (configurable 0–36)
+[list]
+[*]A clean, collapsible panel appears next to your equipment column on the inventory page and in the forge menu.  Drag rings in and out exactly like the vanilla slots; right-click an equipped ring to send it straight to the panel.[/*]
+[*]Every ring effect works from extra slots: Magnet Ring radius, Topaz Ring defense, Aquamarine crit chance, Ruby attack, Lucky Ring, Immunity Band, Iridium Band's glow, Vampire Ring's life-on-kill, and every other vanilla and modded ring.[/*]
+[*]Combined Rings work too, including deeply-nested chains.[/*]
+[*]Save and load works correctly. Your extra rings persist exactly like the vanilla ones do.[/*]
+[*]Works in multiplayer and split-screen - every player has their own panel and slots.  All players should install the mod.[/*]
+[/list]
+
+[b]Infinite ring combining[/b] (toggle, default ON)
+[list]
+[*]Removes the cap on how many rings can be merged together in the forge.[/*]
+[*]Combine already-combined rings. Optionally combine two of the same ring for double the effect (e.g. Magnet Ring + Magnet Ring = 256 extra pickup radius). Enable the Duplicate Ring Cap to prevent this.[/*]
+[*]Stack as many as you like.  The forge UI shows the same nice glow on valid pairs.[/*]
+[/list]
+
+[b]Weapon forging cap [/b](drop-down with numerical values, default Unlimited)
+[list]
+[*]Removes the 3-gem cap on weapons.  Keep applying Emerald/Aquamarine/Ruby/Amethyst/Topaz/Jade beyond the vanilla limit, they keep stacking their respective stat bonuses.[/*]
+[*]You can set your own forge cap with preset defaults with the drop-down menu[/*]
+[*]Diamond forges still apply up to 3 random gems per craft (preserving the vanilla feel), but you can keep using them indefinitely.[/*]
+[*]Dragon Tooth re-rolls now work on Galaxy and Infinity weapons.  Vanilla refuses to let you re-roll the innate stat on endgame weapons; this mod accepts the drop and performs the re-roll the way every other weapon would.[/*]
+[/list]
+
+[b]Dragon Tooth stacking & always-max stats[/b] (two independent toggles)
+[list]
+[*][b]Dragon Tooth Stacking[/b] (default ON): the innate enchantment is added [i]on top of[/i] the ones already on your weapon instead of replacing them.  Forge the same type again to level it up, capped at the game's per-type maximum.  The Dragon Tooth dims when every type on the weapon is already capped - no wasted teeth.[/*]
+[*][b]Always Max Dragon Tooth Stat[/b] (default ON): innate enchantments always land at their maximum level instead of a random roll, and each Dragon Tooth craft also raises the innates already on the weapon to their caps.  The caps can exceed what random rolls ever reach (e.g. Crit. Power V, where rolls top out at III).[/*]
+[*]For reference, the per-type caps: most innate types reach [b]V[/b]; Crit. Chance and Speed cap at [b]III[/b] by the game's design.[/*]
+[/list]
+
+[b]Pick your innate enchantment[/b] (optional, with [url=https://www.nexusmods.com/stardewvalley/mods/26803]Pick Your Enchantment (Forge Menu Choice)[/url])
+[list]
+[*]With Pick Your Enchantment installed, its selection carousel also opens for the Dragon Tooth crafts this mod handles - Galaxy/Infinity weapons, and [i]every[/i] weapon when Dragon Tooth Stacking is on.  Choose exactly which innate enchantment you get.[/*]
+[*]The carousel stays honest: with stacking on, types already at their cap are filtered out; with Always Max on, what you see is the level you get.[/*]
+[*]Without Pick Your Enchantment, Dragon Tooth crafts roll randomly, vanilla-style - stacking and always-max still apply.[/*]
+[/list]
+
+[b]Forge right-click quality-of-life[/b]
+[list]
+[*]Right-click items in your inventory while the forge is open to send them where they belong: rings to the first free valid slot, tools and weapons to the left slot, forge ingredients (Dragon Teeth, Prismatic Shards, Galaxy Souls, gems) to the right slot.[/*]
+[*]Right-click a same-type weapon to place it as the appearance source for cosmetic weapon-skin forging.[/*]
+[*]Right-click a filled forge slot to take the item back out - rings prefer your panel and free ring slots, stacks merge back into your inventory.[/*]
+[*]Works on controller with the X button.[/*]
+[/list]
+
+[b]Multiple enchantments per weapon and tool[/b] (toggle, default ON)
+[list]
+[*]Prismatic Shards now stack their secondary enchantments instead of replacing them.[/*]
+[*]Want Vampiric AND Crusader AND Bug Killer on the same weapon?  Want Reaching AND Bottomless AND Generous on the same watering can?  Go for it.[/*]
+[*]With this off, vanilla single-enchantment rules apply, but Prismatic Shards on fully-enchanted tools will safely re-roll instead of deleting your tool.[/*]
+[/list]
+
+[line]
+
+[size=4][b]✦ Configuration[/b][/size]
+
+Every feature toggles independently via [b]Generic Mod Config Menu[/b] (recommended) or by editing [i]config.json[/i] directly.  All settings can be changed at any time without breaking your save.
+
+[list]
+[*][b]Extra Ring Slots[/b] - 0 to 36.  Reducing this returns excess rings to your inventory; increasing it preserves your existing ones. Default set to 4.[/*]
+[*][b]Infinite Combining[/b] - uncap ring fusion.[/*]
+[*][b]Add Combined Duplicate Ring Cap[/b] - requires [b]Infinite Combining[/b] to be on. Prevents the same ring type from appearing more than once inside a Combined Ring. Cannot combine two identical rings.[/*]
+[*][b]Weapon Forging Cap[/b] - Set the maximum number of gem forges per weapon. Default is Unlimited.[/*]
+[*][b]Remove Diamond Forges Cap [/b]- Each Diamond forge applies three random gem enchantments, but you can keep using them indefinitely. Off by default.[/*]
+[*][b]Multiple Enchantments[/b] - stack named secondary enchantments.[/*]
+[*][b]Dragon Tooth Stacking[/b] - innate enchantments add and level up instead of replacing. On by default.[/*]
+[*][b]Always Max Dragon Tooth Stat[/b] - Dragon Tooth innates always land at (and raise existing innates to) their maximum level. On by default.[/*]
+[*][b]Forge Menu Choice Integration[/b] - open Pick Your Enchantment's carousel for the Dragon Tooth crafts this mod handles. On by default; does nothing if that mod isn't installed.[/*]
+[*][b]Verbose Logging[/b] - per-event diagnostic toggle for bug reports.  Off by default.[/*]
+[*][b]Ring/Stat Tick Snapshot[/b] - very noisy per-second diagnostic of equipped rings and stats; only for debugging ring effects. Off by default.[/*]
+[*][b]Uninstall Safety[/b] - rings live in this mod's save data. Before removing the mod, you can toggle this option to quickly remove all rings within the ring menu.[/*]
+[/list]
+
+[line]
+
+[size=4][b]✦ SMAPI Console Commands[/b][/size]
+
+[list]
+[*][b]"mrif_stats"[/b] - dump the local player's current ring-derived stats (defense, attack, magnetic radius, crit, luck, immunity, etc.).[/*]
+[*][b]"mrif_drain"[/b] - return every extra-slot ring to your inventory (or drop at your feet if full). Run this before uninstalling the mod to avoid losing rings stored in extra slots.[/*]
+[/list]
+
+[line]
+
+[size=4][b]✦ Compatibility[/b][/size]
+
+[list]
+[*]Stardew Valley 1.6.15+[/*]
+[*][url=https://www.nexusmods.com/stardewvalley/mods/2400]SMAPI [/url]4.0+[/*]
+[*][b]Multiplayer and split-screen supported[/b] (new in 1.1.0). Each player's extra rings and panel are their own; install the mod for all players.[/*]
+[*]Optional: [url=https://www.nexusmods.com/stardewvalley/mods/5098]Generic Mod Config Menu[/url]
+for in-game configuration.[/*]
+[*]Optional: [url=https://www.nexusmods.com/stardewvalley/mods/26803]Pick Your Enchantment (Forge Menu Choice)[/url] for choosing Dragon Tooth innate enchantments (see Features). The integration also irons out a couple of carousel quirks while it's at it.[/*]
+[*][url=https://www.nexusmods.com/stardewvalley/mods/10668?tab=description]Enchantable Scythes And Golden Scythe Respawns[/url] or [url=https://www.nexusmods.com/stardewvalley/mods/26217?tab=description]Scythe Tool Enchantments[/url] (don't use both together)[/*]
+[*]Should be compatible with new enchantment and new ring mods as long as they are using [url=https://www.nexusmods.com/stardewvalley/mods/2400]SMAPI [/url]to properly add them.[/*]
+[*][url=https://www.nexusmods.com/stardewvalley/mods/46822?tab=description]JP's Wear More Trinkets[/url][/*]
+[*][url=https://www.nexusmods.com/stardewvalley/mods/15933]Napalm Mummies[/url] - works out of the box: this mod ships a built-in patch so Napalm Rings in extra slots (or nested deep in combined rings) still detonate crumpled mummies.[/*]
+[*]Compatible with [url=http://forums.stardewvalley.net/threads/unofficial-mod-updates.2096/post-173170]chiccenDev's More Rings 1.2.4[/url] (the 1.6-compatible Content Patcher version). The patch is optional and self-disabling: it does nothing if More Rings isn't installed.
+[list]
+[*][i]Note: Some More Rings effects apply once regardless of count - Wide Nets and Far Reaching - and True Sight / Diamond Booze are on/off effects. That's More Rings' own behavior, the same in any ring slot.[/i][/*]
+[/list]
+[/*]
+[*]Ships with translations for all 11 supported languages (German, Spanish, French, Hungarian, Italian, Japanese, Korean, Portuguese, Russian, Turkish, Chinese). Machine-assisted - corrections welcome![/*]
+[*]Android is likely NOT compatible.[/*]
+[*][url=https://www.nexusmods.com/stardewvalley/mods/3214]Wear More Rings[/url] is NOT compatible[/*]
+[/list]
+
+[line]
+
+[size=4][b]✦ Installation[/b][/size]
+
+[list=1]
+[*]Install [url=https://smapi.io]SMAPI[/url] 4.0 or later.[/*]
+[*]Download this mod and unzip it into [i]Stardew Valley/Mods[/i] or download with Vortex.[/*]
+[*]Run the game once with SMAPI to generate [i]config.json[/i].[/*]
+[*]Optional: install [url=https://www.nexusmods.com/stardewvalley/mods/5098]Generic Mod Config Menu[/url]
+to configure in-game.[/*]
+[/list]
+
+[line]
+
+[size=4][b]✦ Uninstalling[/b][/size]
+
+Before removing this mod, return your extra-slot rings to your inventory.  You have three options:
+
+[list=1]
+[*]Open the inventory menu, drag every extra ring back to your bag yourself.[/*]
+[*]Open Generic Mod Config Menu → Multi Ring Infinite Forging → toggle "[b]Eject all extra rings now[/b]" and apply.[/*]
+[*]In the SMAPI console, type [i]mrif_drain[/i] and press Enter.[/*]
+[/list]
+
+Then save and quit.  Rings still in extra slots when the mod is removed remain in the save file but are unreachable until the mod is reinstalled - at which point they'll reappear in the extra slot panel.
+
+[b]Recovery if you forgot:[/b] reinstall the mod, load your save, run [i]mrif_drain[/i] in the console, save, and uninstall again.
+
+[line]
+
+[size=4][b]✦ Bug reports[/b][/size]
+
+If something doesn't work as expected:
+
+[list=1]
+[*]Reproduce the issue once with [b]Verbose Logging[/b] enabled in the mod config.[/*]
+[*]Attach your [i]SMAPI-latest.txt[/i] (found in[i] StardewValley/ErrorLogs/[/i] or via the SMAPI log parser at [url=https://smapi.io/log]smapi.io/log[/url]).[/*]
+[*]Include a short description of the steps you took and what you expected to happen.[/*]
+[/list]
+
+[line]
+
+[size=4][b]✦ Credits[/b][/size]
+
+Built on top of [b]Harmony[/b] and the [b]SMAPI[/b] modding framework.  Thanks to the Stardew modding community for the reference material that made deep forge patching possible.
