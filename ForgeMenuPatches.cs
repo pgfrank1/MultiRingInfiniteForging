@@ -46,9 +46,6 @@ namespace MultiRingInfiniteForging
         private static readonly System.Reflection.MethodInfo? ValidateCraftMethod =
             AccessTools.Method(typeof(ForgeMenu), "_ValidateCraft");
 
-        private static readonly System.Reflection.MethodInfo? HighlightItemsMethod =
-            AccessTools.Method(typeof(ForgeMenu), "HighlightItems");
-
 
         /// <summary>All mutable panel/UI state, one instance per screen.  Split-screen
         /// players each have their own menus, so sharing this across screens made one

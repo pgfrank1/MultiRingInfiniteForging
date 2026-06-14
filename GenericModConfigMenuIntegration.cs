@@ -16,20 +16,7 @@ namespace MultiRingInfiniteForging
 
             api.Register(
                 mod: mod.ModManifest,
-                reset: () =>
-                {
-                    config.ExtraRingSlots = 4;
-                    config.InfiniteCombining = true;
-                    config.AddCombinedDuplicateRingCap = false;
-                    config.WeaponForgingCap = -1;
-                    config.RemoveDiamondForgesCap = false;
-                    config.MultipleEnchantments = true;
-                    config.DragonToothStacking = true;
-                    config.AlwaysMaxDragonToothStat = true;
-                    config.ForgeMenuChoiceIntegration = true;
-                    config.VerboseLogging = false;
-                    config.VerboseTickSnapshot = false;
-                },
+                reset: () => ResetToDefaults(config),
                 save: save
             );
 
@@ -165,6 +152,21 @@ namespace MultiRingInfiniteForging
                 },
                 name: () => ModEntry.T("config.uninstall.safety.button"),
                 tooltip: () => ModEntry.T("config.uninstall.safety.button.tooltip"));
+        }
+
+        /// <summary>Reset every config field to its <see cref="ModConfig"/> default by
+        /// copying from a fresh instance.  Defaults then live in exactly one place (the
+        /// ModConfig property initializers), so GMCM's "Reset to Default" can't silently
+        /// drift from them.  Previously each default was re-hardcoded in the reset lambda,
+        /// and a missed update there reverted DragonToothStacking on reset.</summary>
+        private static void ResetToDefaults(ModConfig config)
+        {
+            var defaults = new ModConfig();
+            foreach (var prop in typeof(ModConfig).GetProperties())
+            {
+                if (prop.CanRead && prop.CanWrite)
+                    prop.SetValue(config, prop.GetValue(defaults));
+            }
         }
     }
 }
