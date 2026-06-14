@@ -1,8 +1,8 @@
 ﻿# Multi Ring Infinite Forging
 
 A Stardew Valley 1.6 SMAPI mod that lifts every artificial limit the forge
-imposes — extra ring slots, unlimited ring combining, unlimited gem forging
-on weapons, and stackable enchantments — all configurable.
+imposes: extra ring slots, unlimited ring combining, unlimited gem forging
+on weapons, and stackable enchantments. Everything is configurable.
 
 [![Stardew Valley 1.6](https://img.shields.io/badge/Stardew%20Valley-1.6.15%2B-green.svg)](https://www.stardewvalley.net/)
 [![SMAPI 4.0+](https://img.shields.io/badge/SMAPI-4.0%2B-blue.svg)](https://smapi.io/)
@@ -11,19 +11,28 @@ on weapons, and stackable enchantments — all configurable.
 
 ## What it does
 
-- **Extra ring slots** — up to 16 additional ring slots in a collapsible panel
-  next to your equipment column.  Available in both the inventory page and the
-  forge menu.  Every vanilla ring effect works from extra slots: stat bonuses,
-  light sources, on-kill procs, and combined rings.
-- **Infinite ring combining** — merge rings without the vanilla cap.  Stack
+- **Extra ring slots**: up to 36 additional ring slots in a collapsible panel
+  next to your equipment column, in both the inventory page and the forge menu.
+  Every vanilla and modded ring effect works from extra slots: stat bonuses,
+  light sources, on-kill procs, and combined rings (including nested chains).
+- **Infinite ring combining**: merge rings without the vanilla cap.  Stack
   duplicates, combine already-combined rings, build whatever ring tower you
   like.
-- **Configurable weapon forging cap** — set a custom gem forge limit per weapon
-  (or -1 for unlimited).  Keep applying gems past vanilla limits.
-- **Multiple enchantments** — stack named secondary enchantments instead of
+- **Configurable weapon forging cap**: set a custom gem forge limit per weapon
+  (or unlimited).  Keep applying gems past vanilla limits.
+- **Multiple enchantments**: stack named secondary enchantments instead of
   replacing them on each Prismatic Shard forge.
-- **Dragon Tooth on endgame weapons** — re-roll the innate stat on Galaxy
-  and Infinity weapons, which vanilla refuses.
+- **Dragon Tooth, your way**: re-roll innate enchantments on Galaxy and Infinity
+  weapons (which vanilla refuses), stack them instead of replacing, and
+  optionally always land max-level stats.
+- **Forge right-click quality-of-life**: right-click sends rings, tools, weapons,
+  and ingredients to the correct forge slot, and takes them back out.  Works on
+  controller (X).
+- **Multiplayer and split-screen**: every player gets their own extra ring slots
+  and panel.  Install the mod for all players.
+- **Pick Your Enchantment integration**: with [Pick Your Enchantment (Forge Menu
+  Choice)](https://www.nexusmods.com/stardewvalley/mods/26803) installed, choose
+  your Dragon Tooth innate from a carousel instead of gambling.
 
 Every feature is independently toggleable via `config.json` or the in-game
 [Generic Mod Config Menu](https://www.nexusmods.com/stardewvalley/mods/5098).
@@ -32,7 +41,7 @@ Every feature is independently toggleable via `config.json` or the in-game
 
 1. Install [SMAPI](https://smapi.io) 4.0 or later.
 2. Download the latest release from [Nexus Mods](https://www.nexusmods.com/stardewvalley/mods/46798)
-   (or build from source — see below).
+   (or build from source, see below).
 3. Unzip into your `Stardew Valley/Mods/` folder.
 4. Launch the game.  A `config.json` will be created on first run.
 5. (Optional) Install [Generic Mod Config Menu](https://www.nexusmods.com/stardewvalley/mods/5098)
@@ -42,14 +51,19 @@ Every feature is independently toggleable via `config.json` or the in-game
 
 | Setting | Default | Description |
 |---|---|---|
-| `ExtraRingSlots` | `4` | How many extra ring slots to add (0–16). |
+| `ExtraRingSlots` | `4` | How many extra ring slots to add (0–36). |
 | `InfiniteCombining` | `true` | Allow combining rings beyond the vanilla cap. |
+| `AddCombinedDuplicateRingCap` | `false` | Requires `InfiniteCombining`.  Prevents the same ring type from appearing more than once inside a combined ring (so no doubling up a Magnet Ring inside another). |
 | `WeaponForgingCap` | `-1` | Maximum gem forges per weapon (`-1` = unlimited, `0` = none, `3` = vanilla, any `N` = cap). |
 | `RemoveDiamondForgesCap` | `false` | When true, Diamond can keep adding gem enchantments even after all six types are present.  Off by default to preserve vanilla feel. |
 | `MultipleEnchantments` | `true` | Stack secondary enchantments instead of replacing them. |
-| `VerboseLogging` | `false` | Emit per-second diagnostic snapshots to `smapi-latest.log`.  Off by default; enable when reporting bugs. |
+| `DragonToothStacking` | `true` | Dragon Tooth innate enchantments add and level up instead of replacing, capped at each type's per-game maximum. |
+| `AlwaysMaxDragonToothStat` | `true` | Dragon Tooth innates always land at their maximum level, and each craft raises the weapon's existing innates to their caps. |
+| `ForgeMenuChoiceIntegration` | `true` | Open Pick Your Enchantment's carousel for the Dragon Tooth crafts this mod handles.  Does nothing if that mod isn't installed. |
+| `VerboseLogging` | `false` | Emit per-event `[Test]`/`[Forge]` diagnostic traces to `smapi-latest.log`.  Off by default; enable when reporting bugs. |
+| `VerboseTickSnapshot` | `false` | Emit the very noisy per-second snapshot of equipped rings and stats.  Off by default; for debugging ring effects only. |
 
-Any setting can be changed at any time — no save corruption risk.
+Any setting can be changed at any time, with no save corruption risk.
 
 ## Uninstalling
 
