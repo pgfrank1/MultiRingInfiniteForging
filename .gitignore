@@ -1,0 +1,10 @@
+# Build output
+bin/
+obj/
+
+# SMAPI per-user config (generated on first run)
+config.json
+
+# IDE / editor
+.vs/
+*.user
