@@ -59,6 +59,16 @@ namespace MultiRingInfiniteForging
             }
         }
 
+        /// <summary>Drop both craft-rules memos in one call: the inventory-highlight verdicts
+        /// here and the forge panel's ring-dim verdicts in ForgeMenuPatches.  Config edits and
+        /// menu construction change both, so this single entry point keeps callers from
+        /// refreshing one while leaving the other stale.</summary>
+        internal static void InvalidateCraftCaches()
+        {
+            InvalidateHighlightCache();
+            ForgeMenuPatches.InvalidateDimCache();
+        }
+
         /// <summary>Session cleanup on return to title: the memo holds Item references
         /// from the closed save, and the log-dedup set is save-scoped noise.</summary>
         internal static void ClearSessionCaches()
@@ -224,92 +234,35 @@ namespace MultiRingInfiniteForging
                 Log.Log("AddEnchantment patching failed: " + ex.Message, LogLevel.Warn);
             }
             
-            // 8) Clean up the leftover DiamondEnchantment placeholder after a Diamond
-            //    forge so the tooltip doesn't show "+<huge number> Random Forges".
+            // 8) Tool.Forge overrides, all dispatched by gem item ID from a single prefix
+            //     (Tool_Forge_Prefix): the Diamond 3-per-craft cap, the Prismatic Shard
+            //     re-roll when MultipleEnchantments is off, and the Dragon Tooth re-roll /
+            //     stacking (including on Galaxy/Infinity weapons vanilla refuses).  A postfix
+            //     strips the leftover DiamondEnchantment marker so the tooltip doesn't show
+            //     "+<huge number> Random Forges".  These used to be four separate patch
+            //     registrations; since each prefix only ever acted on its own gem, one
+            //     dispatching prefix is equivalent and makes the routing explicit instead of
+            //     relying on Harmony prefix ordering.
             try
             {
-                var forgeMethod = AccessTools.Method(typeof(Tool),
-                    nameof(Tool.Forge));
+                var forgeMethod = AccessTools.Method(typeof(Tool), nameof(Tool.Forge));
                 if (forgeMethod != null)
                 {
                     harmony.Patch(
                         original: forgeMethod,
+                        prefix: new HarmonyMethod(typeof(Patches), nameof(Tool_Forge_Prefix)),
                         postfix: new HarmonyMethod(typeof(Patches), nameof(Tool_Forge_Postfix))
                     );
-                    Log.Log("Patched Tool.Forge successfully.", LogLevel.Trace);
+                    Log.Log("Patched Tool.Forge (prefix dispatch + postfix) successfully.", LogLevel.Trace);
+                }
+                else
+                {
+                    Log.Log("Could not find Tool.Forge method to patch.", LogLevel.Warn);
                 }
             }
             catch (Exception ex)
             {
                 Log.Log("Tool.Forge patching failed: " + ex.Message, LogLevel.Warn);
-            }
-            
-            // 9) Cap Diamond forges at 3 per craft.  Vanilla computes the per-craft cap
-            //    as GetMaxForges() - GetTotalForgeLevels(); with an unlimited cap
-            //    (WeaponForgingCap == -1) that becomes int.MaxValue, so a single
-            //    Diamond fills all 6 gem slots.  Intercept the Diamond branch and
-            //    emulate the vanilla 3-per-craft cap.
-            try
-            {
-                var forgeMethod = AccessTools.Method(typeof(Tool),
-                    nameof(Tool.Forge));
-                if (forgeMethod != null)
-                {
-                    harmony.Patch(
-                        original: forgeMethod,
-                        prefix: new HarmonyMethod(typeof(Patches), nameof(Tool_Forge_Diamond_Prefix))
-                    );
-                    Log.Log("Patched Tool.Forge (Diamond cap) successfully.", LogLevel.Trace);
-                }
-            }
-            catch (Exception ex)
-            {
-                Log.Log("Tool.Forge (Diamond cap) patching failed: " + ex.Message, LogLevel.Warn);
-            }
-            // 10) Prismatic Shard re-roll on fully-enchanted tools when
-            //     MultipleEnchantments is disabled.  Vanilla's Tool.Forge returns
-            //     null when the enchantment pool is empty, which would delete the
-            //     tool via the null-craft-result path.  Pre-empt that by manually
-            //     clearing existing tool enchantments first.
-            try
-            {
-                var forgeMethod = AccessTools.Method(typeof(Tool),
-                    nameof(Tool.Forge));
-                if (forgeMethod != null)
-                {
-                    harmony.Patch(
-                        original: forgeMethod,
-                        prefix: new HarmonyMethod(typeof(Patches), nameof(Tool_Forge_PrismaticReroll_Prefix))
-                    );
-                    Log.Log("Patched Tool.Forge (Prismatic re-roll) successfully.", LogLevel.Trace);
-                }
-            }
-            catch (Exception ex)
-            {
-                Log.Log("Tool.Forge (Prismatic re-roll) patching failed: " + ex.Message, LogLevel.Warn);
-            }
-            // 11) Dragon Tooth re-roll on Infinity / fully-evolved Galaxy weapons.
-            //     Vanilla refuses this combination (Tool.CanForge restricts to
-            //     name-doesn't-contain-Galaxy AND level < 15) — but the mechanic is
-            //     useful as an endgame mod feature.  We allow the drop via
-            //     CanRightItemEnchantTool; this prefix executes the re-roll mechanic
-            //     in cases vanilla would otherwise skip.
-            try
-            {
-                var forgeMethod = AccessTools.Method(typeof(Tool),
-                    nameof(Tool.Forge));
-                if (forgeMethod != null)
-                {
-                    harmony.Patch(
-                        original: forgeMethod,
-                        prefix: new HarmonyMethod(typeof(Patches), nameof(Tool_Forge_DragonToothReroll_Prefix))
-                    );
-                    Log.Log("Patched Tool.Forge (Dragon Tooth Infinity re-roll) successfully.", LogLevel.Trace);
-                }
-            }
-            catch (Exception ex)
-            {
-                Log.Log("Tool.Forge (Dragon Tooth Infinity re-roll) patching failed: " + ex.Message, LogLevel.Warn);
             }
         }
 
@@ -591,6 +544,24 @@ namespace MultiRingInfiniteForging
         //  Weapon / tool forge patches (GetMaxForges, AddEnchantment,
         //  Diamond/Prismatic/Dragon Tooth forge intercepts)
         // ============================================================
+
+        /// <summary>Single Tool.Forge prefix that dispatches to the right override by gem
+        /// item ID.  Replaces three separate prefixes on Tool.Forge; each only ever acted on
+        /// its own gem, so one switch is behavior-equivalent and makes the routing explicit
+        /// rather than dependent on Harmony prefix ordering.  The target helpers keep their
+        /// own id guards as defense-in-depth.  Galaxy Souls, gems, and every other item fall
+        /// through to vanilla (return true).</summary>
+        public static bool Tool_Forge_Prefix(
+            Tool __instance, Item item, bool count_towards_stats, ref bool __result)
+        {
+            return item?.QualifiedItemId switch
+            {
+                "(O)72"  => Tool_Forge_Diamond_Prefix(__instance, item, count_towards_stats, ref __result),
+                "(O)74"  => Tool_Forge_PrismaticReroll_Prefix(__instance, item),
+                "(O)852" => Tool_Forge_DragonToothReroll_Prefix(__instance, item, count_towards_stats, ref __result),
+                _        => true,
+            };
+        }
 
         public static void MeleeWeapon_GetMaxForges_Postfix(ref int __result)
         {

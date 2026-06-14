@@ -577,8 +577,7 @@ namespace MultiRingInfiniteForging
             _scrollOffset = 0;
             // Fresh menu: drop the highlight/dim memos so nothing from the previous
             // menu (or a config edit made in between) leaks into this one.
-            InvalidateDimCache();
-            Patches.InvalidateHighlightCache();
+            Patches.InvalidateCraftCaches();
             RebuildSlots(__instance);
 
             if (ToggleButton != null)

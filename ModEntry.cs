@@ -202,9 +202,8 @@ namespace MultiRingInfiniteForging
                 {
                     Helper.WriteConfig(Config);
                     RingSlotManager.EnsureSize();
-                    // Config flips change the forge highlight/dim verdicts — drop the memos.
-                    Patches.InvalidateHighlightCache();
-                    ForgeMenuPatches.InvalidateDimCache();
+                    // Config flips change the forge highlight/dim verdicts; drop both memos.
+                    Patches.InvalidateCraftCaches();
                 });
 
             // Optional cross-mod compatibility patches that must run after all mods have
