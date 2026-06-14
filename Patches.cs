@@ -915,10 +915,16 @@ namespace MultiRingInfiniteForging
             yield return typeof(CritPowerEnchantment);
         }
 
-        /// <summary>The five innate types vanilla's reroll switch always picks exactly one of
-        /// (<see cref="MeleeWeapon.attemptAddRandomInnateEnchantment"/>).  If a reroll's exclude
-        /// list covers all five, that loop can never roll an unexcluded type and spins forever,
-        /// so callers must not hand it such a list.</summary>
+        /// <summary>The five innate types vanilla's reroll switch (<c>switch (r.Next(5))</c> in
+        /// <see cref="MeleeWeapon.attemptAddRandomInnateEnchantment"/>) always picks exactly one
+        /// of.  Loop termination depends only on these: vanilla rerolls until it adds a type not
+        /// in the exclude list, and the switch always adds one of the five, so an exclude list
+        /// that covers all five can never be satisfied and the loop spins forever.  This is fixed
+        /// vanilla internals, NOT "every innate a weapon can hold": a modded enchantment (e.g.
+        /// from a scythe-enchant mod) never enters vanilla's roller, so it can neither cause nor
+        /// prevent this loop and is correctly ignored here.  The three probabilistic types
+        /// (Defense/Lightweight/SlimeGatherer) don't matter either, since they aren't guaranteed
+        /// each iteration.  Keep in sync with vanilla's switch.</summary>
         private static readonly Type[] CoreInnateTypes =
         {
             typeof(AttackEnchantment),
