@@ -47,7 +47,8 @@ namespace MultiRingInfiniteForging
             {
                 page.equipmentIcons.RemoveAll(c =>
                     c.name.StartsWith("ExtraRing") || c.name == "ExtraRingToggle");
-                PanelFor(page).Build();
+                var panel = PanelFor(page);
+                panel.Build(panel.PanelOpen);
                 page.populateClickableComponentList();
             }
         }
@@ -89,7 +90,23 @@ namespace MultiRingInfiniteForging
 
         // ---- Harmony delegators: route to the panel for the page in hand ----
 
-        public static void Ctor_Postfix(InventoryPage __instance) => PanelFor(__instance).Build();
+        public static void Ctor_Postfix(InventoryPage __instance)
+        {
+            // A window resize recreates the whole GameMenu (Game1.gameWindowSizeChanged builds
+            // a new GameMenu + pages), so a fresh InventoryPage and panel are constructed
+            // mid-session.  The old GameMenu is still the active menu while the new one is being
+            // built, so inherit the outgoing page's open state -- resizing then doesn't collapse
+            // the panel.  A genuine fresh menu open (no GameMenu active yet) starts closed.
+            bool open = false;
+            if (Game1.activeClickableMenu is GameMenu oldGm
+                && oldGm.pages.Count > GameMenu.inventoryTab
+                && oldGm.pages[GameMenu.inventoryTab] is InventoryPage oldPage
+                && Panels.TryGetValue(oldPage, out var oldPanel))
+            {
+                open = oldPanel.PanelOpen;
+            }
+            PanelFor(__instance).Build(open);
+        }
 
         public static void Draw_Postfix(InventoryPage __instance, SpriteBatch b)
         {
@@ -146,9 +163,9 @@ namespace MultiRingInfiniteForging
         //  Build / inject into equipmentIcons
         // ============================================================
 
-        public void Build()
+        public void Build(bool open = false)
         {
-            PanelOpen = false;
+            PanelOpen = open;
             _scrollOffset = 0;
             RebuildSlots();
 
