@@ -14,18 +14,12 @@ namespace MultiRingInfiniteForging
     /// instance per ForgeMenu (kept in <see cref="ForgeMenuPatches"/>'s table), so split-screen
     /// players each have their own.  The craft-rules helpers it leans on stay static on
     /// <see cref="ForgeMenuPatches"/> and are pulled in via <c>using static</c>.</summary>
-    internal sealed class ForgeRingPanel
+    internal sealed class ForgeRingPanel : RingSlotPanel
     {
-        private const int SlotSize = 64;
-        private const int SlotSpacing = 4;
-        private const int FirstSlotId = 120_000;
-        private const int ToggleButtonId = 119_999;
-        private const int ScrollUpBtnId = 119_998;
-        private const int ScrollDownBtnId = 119_997;
-        private const int ScrollBtnWidth = 40;
-        private const int ScrollBtnHeight = 44;
-        private const int ScrollBarWidth = 6;
-        private const int ScrollBarGap = 4;
+        protected override int FirstSlotId => 120_000;
+        protected override int ToggleButtonId => 119_999;
+        protected override int ScrollUpBtnId => 119_998;
+        protected override int ScrollDownBtnId => 119_997;
 
         // Forge spritesheet (cached on first access).  Vanilla loads this into
         // ForgeMenu.forgeTextures; we mirror its content path so our visuals match.
@@ -43,19 +37,6 @@ namespace MultiRingInfiniteForging
 
         private readonly ForgeMenu _menu;
 
-        private readonly List<ClickableComponent> Slots = new();
-        private ClickableTextureComponent? ToggleButton;
-        private ClickableComponent? _scrollUpBtn;
-        private ClickableComponent? _scrollDownBtn;
-        private bool _panelOpen;
-        public bool PanelOpen => _panelOpen;
-        private int _scrollOffset;
-        private int _maxScrollOffset;
-        private int _visibleRows;
-        private int _lastVpW = -1;
-        private int _lastVpH = -1;
-        private string _hoverText = "";
-
         // Forge-completion trackers used by Update diagnostics.
         private string? _lastHeldName;
         private string? _lastUpdateLeftName;
@@ -72,6 +53,18 @@ namespace MultiRingInfiniteForging
         private bool PairDuplicate;
 
         public ForgeRingPanel(ForgeMenu menu) => _menu = menu;
+
+        protected override IClickableMenu SnapMenu => _menu;
+        protected override Rectangle PanelBounds() => GetSlotsBounds();
+        protected override void AfterScrollChange()
+        {
+            ApplyPanelVisibility();
+            _menu.populateClickableComponentList();
+            SnapToVisibleSlot();
+        }
+        protected override Color ScrollTrackColor => new Color(0x40, 0x18, 0x10) * 0.7f;
+        protected override Color ScrollThumbColor => ForgeSlotFill;
+        protected override Color ScrollArrowColor => ForgeSlotFill;
 
         // ============================================================
         //  Build / inject into equipmentIcons
@@ -431,43 +424,7 @@ namespace MultiRingInfiniteForging
                     }
                 }
 
-                // Scroll bar.
-                if (_scrollUpBtn != null && _scrollDownBtn != null && _maxScrollOffset > 0)
-                {
-                    int trackX = _scrollUpBtn.bounds.X + (ScrollBtnWidth - ScrollBarWidth) / 2;
-                    int trackY = _scrollUpBtn.bounds.Bottom;
-                    int trackH = _scrollDownBtn.bounds.Y - trackY;
-                    b.Draw(Game1.staminaRect,
-                        new Rectangle(trackX, trackY, ScrollBarWidth, trackH),
-                        new Color(0x40, 0x18, 0x10) * 0.7f);
-
-                    int totalRows = _maxScrollOffset + _visibleRows;
-                    int thumbH = System.Math.Max(ScrollBarWidth * 2,
-                        trackH * _visibleRows / totalRows);
-                    int thumbY = trackY +
-                        (trackH - thumbH) * _scrollOffset / _maxScrollOffset;
-                    b.Draw(Game1.staminaRect,
-                        new Rectangle(trackX, thumbY, ScrollBarWidth, thumbH),
-                        ForgeSlotFill);
-                }
-
-                // Scroll indicators.
-                if (_scrollOffset > 0 && _scrollUpBtn != null)
-                {
-                    Color arrowCol = _scrollUpBtn.containsPoint(Game1.getOldMouseX(), Game1.getOldMouseY())
-                        ? Color.Gold : ForgeSlotFill;
-                    Utility.drawWithShadow(b, Game1.mouseCursors,
-                        new Vector2(_scrollUpBtn.bounds.X, _scrollUpBtn.bounds.Y),
-                        new Rectangle(76, 72, 40, 44), arrowCol, 0f, Vector2.Zero, 1f);
-                }
-                if (_scrollOffset < _maxScrollOffset && _scrollDownBtn != null)
-                {
-                    Color arrowCol = _scrollDownBtn.containsPoint(Game1.getOldMouseX(), Game1.getOldMouseY())
-                        ? Color.Gold : ForgeSlotFill;
-                    Utility.drawWithShadow(b, Game1.mouseCursors,
-                        new Vector2(_scrollDownBtn.bounds.X, _scrollDownBtn.bounds.Y),
-                        new Rectangle(12, 76, 40, 44), arrowCol, 0f, Vector2.Zero, 1f);
-                }
+                DrawScrollbarAndArrows(b);
             }
 
             DrawCombinedRingGlow(b);
@@ -564,17 +521,13 @@ namespace MultiRingInfiniteForging
                 if (_scrollUpBtn != null && _scrollUpBtn.containsPoint(x, y) && _scrollOffset > 0)
                 {
                     _scrollOffset--;
-                    ApplyPanelVisibility();
-                    __instance.populateClickableComponentList();
-                    SnapToVisibleSlot();
+                    AfterScrollChange();
                     return false;
                 }
                 if (_scrollDownBtn != null && _scrollDownBtn.containsPoint(x, y) && _scrollOffset < _maxScrollOffset)
                 {
                     _scrollOffset++;
-                    ApplyPanelVisibility();
-                    __instance.populateClickableComponentList();
-                    SnapToVisibleSlot();
+                    AfterScrollChange();
                     return false;
                 }
             }
@@ -1193,36 +1146,7 @@ namespace MultiRingInfiniteForging
                 __instance.populateClickableComponentList();
             }
 
-            _hoverText = "";
-
-            if (ToggleButton != null && ToggleButton.containsPoint(x, y))
-            {
-                _hoverText = _panelOpen
-                    ? ModEntry.T("panel.hover.hide")
-                    : ModEntry.T("panel.hover.show");
-                return;
-            }
-
-            if (!_panelOpen) return;
-
-            foreach (var slot in Slots)
-            {
-                bool inside = slot.containsPoint(x, y);
-                if (inside)
-                    slot.scale = System.Math.Min(slot.scale + 0.05f, 1.1f);
-                else
-                    slot.scale = System.Math.Max(1f, slot.scale - 0.025f);
-
-                if (!inside) continue;
-
-                int idx = SlotIndex(slot);
-                var ring = idx >= 0 && idx < RingSlotManager.Slots.Count
-                    ? RingSlotManager.Slots[idx]
-                    : null;
-                _hoverText = ring != null
-                    ? ring.DisplayName + "\n" + ring.getDescription()
-                    : ModEntry.T("panel.slot.empty");
-            }
+            UpdateHoverAndScale(x, y);
         }
 
         // ============================================================
@@ -1251,54 +1175,6 @@ namespace MultiRingInfiniteForging
                 }
                 _menu.snapCursorToCurrentSnappedComponent();
             }
-        }
-
-        public bool HandleScroll(int direction)
-        {
-            if (!_panelOpen || ToggleButton == null || _maxScrollOffset <= 0) return true;
-
-            var mousePos = Game1.getMousePosition();
-            var panelBounds = GetSlotsBounds();
-            if (panelBounds == Rectangle.Empty) return true;
-
-            Rectangle scrollArea = new Rectangle(
-                panelBounds.X - 16, panelBounds.Y - 16 - ScrollBtnHeight,
-                panelBounds.Width + 32, panelBounds.Height + 32 + ScrollBtnHeight * 2);
-
-            if (!scrollArea.Contains(mousePos)) return true;
-
-            if (direction > 0 && _scrollOffset > 0)
-                _scrollOffset--;
-            else if (direction < 0 && _scrollOffset < _maxScrollOffset)
-                _scrollOffset++;
-            else
-                return true;
-
-            ApplyPanelVisibility();
-            _menu.populateClickableComponentList();
-            SnapToVisibleSlot();
-            return false;
-        }
-
-        private void SnapToVisibleSlot()
-        {
-            if (!Game1.options.SnappyMenus) return;
-            var snapped = _menu.currentlySnappedComponent;
-            if (snapped == null) return;
-            if (!snapped.name.StartsWith("ExtraRing") || snapped.name.StartsWith("ExtraRingScroll"))
-                return;
-
-            if (snapped.bounds.X <= -5000)
-            {
-                var firstVisible = Slots.FirstOrDefault(s => s.bounds.X > -5000);
-                if (firstVisible != null)
-                {
-                    _menu.setCurrentlySnappedComponentTo(firstVisible.myID);
-                    return;
-                }
-            }
-
-            _menu.snapCursorToCurrentSnappedComponent();
         }
 
         // ============================================================
@@ -1711,8 +1587,5 @@ namespace MultiRingInfiniteForging
             DimRight = null;
             PairDuplicate = false;
         }
-
-        private static int SlotIndex(ClickableComponent c) =>
-            int.TryParse(c.name.Replace("ExtraRing", ""), out var i) ? i : -1;
     }
 }
